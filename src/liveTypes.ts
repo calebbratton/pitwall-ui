@@ -28,6 +28,8 @@ export interface TimingRow {
   tla: string
   number: string
   team: string
+  /** team colour hex without "#", "" when unknown */
+  team_colour: string
   /** seconds to the leader */
   gap: number | null
   laps_down: number
@@ -76,6 +78,35 @@ export interface SessionHeader {
   total_laps: number | null
 }
 
+export interface TrackMarker {
+  number: number
+  x: number
+  y: number
+}
+
+/** One lap of the circuit in feed units (Y up). */
+export interface TrackShape {
+  /** "multiviewer" (circuit data) | "traced" (outline traced from timing) */
+  source: string
+  name: string | null
+  points: [number, number][]
+  /** [minX, minY, maxX, maxY] */
+  bounds: [number, number, number, number]
+  /** degrees to rotate about the centre so the map is oriented like TV graphics */
+  rotation: number
+  corners: TrackMarker[]
+  marshal_sectors: TrackMarker[]
+}
+
+export interface CarFix {
+  number: string
+  tla: string
+  x: number
+  y: number
+  /** "OnTrack" | "OffTrack" | … */
+  status: string
+}
+
 export type ReplayEvent =
   | ({ type: 'session' } & SessionHeader)
   | ({ type: 'snapshot' } & Snapshot)
@@ -84,6 +115,8 @@ export type ReplayEvent =
   | { type: 'radio'; driver: string; tla: string; utc: string | null; url: string; text: string | null }
   | { type: 'radio_transcript'; url: string; tla: string; text: string }
   | { type: 'pit_calls'; report: PitCallReport }
+  | ({ type: 'track' } & TrackShape)
+  | { type: 'positions'; utc: string | null; cars: CarFix[] }
   | { type: 'end' }
   | { type: 'error'; message: string }
 
@@ -97,6 +130,8 @@ export const REPLAY_EVENT_NAMES: readonly ReplayEventName[] = [
   'radio',
   'radio_transcript',
   'pit_calls',
+  'track',
+  'positions',
   'end',
   'error',
 ]
@@ -148,6 +183,8 @@ export interface ReplayState {
   radio: RadioItem[]
   /** in arrival order (oldest first) */
   pitCalls: PitCallSet[]
+  /** marshal sectors under yellow (from race control), sector number -> double yellow? */
+  yellowSectors: Record<number, boolean>
   /** id of the radio clip whose non-empty transcript arrived most recently */
   latestTranscriptId: number | null
   seq: number

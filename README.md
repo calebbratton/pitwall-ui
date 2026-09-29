@@ -42,6 +42,16 @@ each new clip of theirs in order, one at a time (skip/stop in the *Now playing* 
 is auto-played; every clip in the feed has its own play button. The followed driver is remembered per race in
 `localStorage`.
 
+The **track map** draws the circuit outline (rotated like TV graphics when MultiViewer circuit data is
+available, otherwise traced from timing) with corner numbers and a team-coloured dot per car that glides between
+the ~4 Hz position updates (snapping on big jumps; no animation with reduced motion). The track tints yellow
+under SC/VSC and red under a red flag, marshal sectors light up yellow between "YELLOW IN TRACK SECTOR N" and
+"CLEAR IN TRACK SECTOR N", and clicking a dot follows that driver. Positions live in a small external store
+(`lib/trackMap.ts`), so they only re-render the map, not the timing tower.
+
+Replays use F1's public live-timing archive. Car positions from the *real* live feed are token-gated: that will
+need your own F1 TV login and is for local, personal use only.
+
 Try `2026 → Azerbaijan GP`, speed 60x, from lap 29: two safety cars (laps 31 and 36) in about two minutes.
 The first replay of a race downloads the archive, so it takes a few seconds to start. In mock mode the view plays
 a short scripted safety-car sequence instead.
@@ -52,7 +62,8 @@ a short scripted safety-car sequence instead.
 npm run build   # tsc -b && vite build
 npm run lint    # eslint (typescript-eslint strict + react-hooks)
 npm test        # vitest: SSE parser, answer formatting, pipeline state, mock transport,
-                #         replay reducer, race-control noise filter, radio queue, mock replay
+                #         replay reducer, race-control noise filter, radio queue, mock replay,
+                #         track map store, projection and interpolation
 ```
 
 ## Backend contract
@@ -64,7 +75,8 @@ npm test        # vitest: SSE parser, answer formatting, pipeline state, mock tr
 - The `thread_id` from the first `thread` event is sent with every follow-up; **New session** clears it.
 - `GET /api/live/sessions?year=2026` → `[{path, meeting, date}]`
 - `GET /api/live/replay?path=…&speed=…&from_lap=…` → `text/event-stream` read with `EventSource`, events
-  `session`, `snapshot`, `track_status`, `race_control`, `radio`, `radio_transcript`, `pit_calls`, `end`, `error`.
+  `session`, `track`, `positions`, `snapshot`, `track_status`, `race_control`, `radio`, `radio_transcript`,
+  `pit_calls`, `end`, `error`.
   The source is closed on `end`, `error`, Stop and unmount (EventSource would otherwise reconnect and restart
   the replay). See `src/liveTypes.ts`.
 - The backend must allow CORS from the dev origin `http://localhost:5173` (and `http://127.0.0.1:5173`
@@ -92,10 +104,11 @@ src/
   lib/replay.ts            replay event parser, reducer, race-control noise filter, timing formatters
   lib/radioQueue.ts        radio queue reducer, auto-queue rule, follow persistence
   lib/liveApi.ts           /api/live/sessions + EventSource replay transport
-  lib/mockReplay.ts        scripted mock races and replay
+  lib/trackMap.ts          map store (track + positions), rotation/projection, sector segments, lerp/snap
+  lib/mockReplay.ts        scripted mock races and replay (incl. a mock circuit and moving cars)
   components/              TopBar, Transcript, Message, Composer, SessionPanel, RaceCard,
                            Pipeline, ToolCalls, Citations, CompoundPill, RefChips, Markdown, …
-                           LIVE: LiveView, ReplayControls, TrackStatusBanner, TimingTower,
+                           LIVE: LiveView, ReplayControls, TrackStatusBanner, TrackMap, TimingTower,
                            PitCallsPanel, RaceControlFeed, RadioFeed
 ```
 

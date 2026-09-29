@@ -9,6 +9,7 @@ import type {
   ReplayState,
   Snapshot,
   TimingRow,
+  TrackMarker,
   TrackStatus,
 } from '../liveTypes'
 import { TRACK_STATUSES } from '../liveTypes'
@@ -34,6 +35,7 @@ function row(d: Rec): TimingRow {
     tla: str(d.tla, '???'),
     number: str(d.number),
     team: str(d.team),
+    team_colour: typeof d.team_colour === 'string' && /^[0-9a-fA-F]{6}$/.test(d.team_colour) ? d.team_colour : '',
     gap: num(d.gap),
     laps_down: num(d.laps_down) ?? 0,
     interval: num(d.interval),
@@ -67,6 +69,24 @@ function report(r: Rec): PitCallReport {
     calls: Array.isArray(r.calls) ? r.calls.filter(isRecord).map(call) : [],
     assumptions: Array.isArray(r.assumptions) ? r.assumptions.map((a) => str(a)) : [],
   }
+}
+
+const isPoint = (p: unknown): p is [number, number] =>
+  Array.isArray(p) && p.length >= 2 && num(p[0]) !== null && num(p[1]) !== null
+
+function markers(v: unknown): TrackMarker[] {
+  if (!Array.isArray(v)) return []
+  return v
+    .filter(isRecord)
+    .map((m) => ({ number: num(m.number), x: num(m.x), y: num(m.y) }))
+    .filter((m): m is TrackMarker => m.number !== null && m.x !== null && m.y !== null)
+}
+
+function boundsOf(points: [number, number][]): [number, number, number, number] | null {
+  if (points.length === 0) return null
+  const xs = points.map((p) => p[0])
+  const ys = points.map((p) => p[1])
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
 }
 
 /** Convert one SSE message (event name + data string) into a typed ReplayEvent. Malformed -> null. */
@@ -113,6 +133,41 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
         : null
     case 'pit_calls':
       return isRecord(d.report) ? { type: 'pit_calls', report: report(d.report) } : null
+    case 'track': {
+      const points = Array.isArray(d.points) ? d.points.filter(isPoint) : []
+      const b = Array.isArray(d.bounds) ? d.bounds.map(num) : []
+      const bounds =
+        b.length === 4 && b.every((v) => v !== null) ? (b as [number, number, number, number]) : boundsOf(points)
+      return points.length >= 3 && bounds
+        ? {
+            type: 'track',
+            source: str(d.source, 'traced'),
+            name: typeof d.name === 'string' && d.name ? d.name : null,
+            points,
+            bounds,
+            rotation: num(d.rotation) ?? 0,
+            corners: markers(d.corners),
+            marshal_sectors: markers(d.marshal_sectors),
+          }
+        : null
+    }
+    case 'positions':
+      return {
+        type: 'positions',
+        utc: typeof d.utc === 'string' ? d.utc : null,
+        cars: Array.isArray(d.cars)
+          ? d.cars
+              .filter(isRecord)
+              .filter((c) => num(c.x) !== null && num(c.y) !== null)
+              .map((c) => ({
+                number: str(c.number),
+                tla: str(c.tla, str(c.number)),
+                x: c.x as number,
+                y: c.y as number,
+                status: str(c.status, 'OnTrack'),
+              }))
+          : [],
+      }
     case 'end':
       return { type: 'end' }
     case 'error':
@@ -138,6 +193,7 @@ export const initialReplayState: ReplayState = {
   radio: [],
   pitCalls: [],
   latestTranscriptId: null,
+  yellowSectors: {},
   seq: 0,
 }
 
@@ -155,6 +211,8 @@ export function replayReducer(state: ReplayState, action: ReplayAction): ReplayS
       return state.phase === 'connecting' || state.phase === 'running' ? { ...state, phase: 'stopped' } : state
     case 'event':
       if (state.phase !== 'connecting' && state.phase !== 'running') return state
+      // Map events live in their own store (see trackMap.ts) so 4 Hz positions don't re-render the tower.
+      if (action.event.type === 'track' || action.event.type === 'positions') return state
       return applyEvent({ ...state, phase: 'running' }, action.event)
   }
 }
@@ -173,7 +231,12 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
       return { ...state, trackStatus: e.status }
     case 'race_control': {
       const item: RaceControlItem = { id: seq, lap: e.lap, category: e.category, message: e.message }
-      return { ...state, seq, raceControl: [item, ...state.raceControl].slice(0, RACE_CONTROL_CAP) }
+      return {
+        ...state,
+        seq,
+        raceControl: [item, ...state.raceControl].slice(0, RACE_CONTROL_CAP),
+        yellowSectors: applySectorFlag(state.yellowSectors, e.message),
+      }
     }
     case 'radio': {
       if (state.radio.some((r) => r.url === e.url)) return state
@@ -206,7 +269,32 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
       return { ...state, phase: 'ended' }
     case 'error':
       return { ...state, phase: 'error', error: e.message }
+    case 'track':
+    case 'positions':
+      return state
   }
+}
+
+// ---------- marshal sector yellows ----------
+
+const SECTOR_YELLOW = /\b(DOUBLE )?YELLOW IN TRACK SECTOR (\d+)/i
+const SECTOR_CLEAR = /\bCLEAR IN TRACK SECTOR (\d+)/i
+
+/** Yellow on "(DOUBLE) YELLOW IN TRACK SECTOR N" until "CLEAR IN TRACK SECTOR N". Unchanged -> same object. */
+export function applySectorFlag(sectors: Record<number, boolean>, message: string): Record<number, boolean> {
+  const y = SECTOR_YELLOW.exec(message)
+  if (y) {
+    const n = Number(y[2])
+    const double = !!y[1]
+    return sectors[n] === double ? sectors : { ...sectors, [n]: double }
+  }
+  const c = SECTOR_CLEAR.exec(message)
+  if (c) {
+    const n = Number(c[1])
+    if (!(n in sectors)) return sectors
+    return Object.fromEntries(Object.entries(sectors).filter(([k]) => Number(k) !== n))
+  }
+  return sectors
 }
 
 // ---------- race control noise ----------

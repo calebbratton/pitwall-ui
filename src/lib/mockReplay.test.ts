@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { initialReplayState, parseReplayEvent, replayReducer } from './replay'
-import { meetingFromPath, mockReplayScript, mockSessions } from './mockReplay'
+import { meetingFromPath, mockPositions, mockReplayScript, mockSessions } from './mockReplay'
+import { initialMapState, mapReducer } from './trackMap'
 
 describe('mock replay', () => {
   it('lists mock races per season, oldest first', () => {
@@ -32,5 +33,21 @@ describe('mock replay', () => {
     expect(calls).toContain('RETIRED')
     expect(state.radio.find((r) => r.tla === 'NOR')?.text).toBe('Box box, box for hards, safety car.')
     expect(state.raceControl.length).toBeGreaterThanOrEqual(2)
+    expect(state.yellowSectors).toEqual({}) // sector 2 went yellow and was cleared
+  })
+
+  it('has a track and moving cars (with one no-fix car ignored)', () => {
+    const track = mockReplayScript('X').find((f) => f.event === 'track')
+    const t = track && parseReplayEvent('track', JSON.stringify(track.data))
+    expect(t?.type === 'track' && t.marshal_sectors.length).toBe(10)
+    const at = (ms: number) => {
+      const e = parseReplayEvent('positions', JSON.stringify(mockPositions(ms, 3500)))
+      return e ? mapReducer(initialMapState, { type: 'event', event: e }) : initialMapState
+    }
+    const a = at(0)
+    const b = at(250)
+    expect(Object.keys(a.cars)).toHaveLength(20)
+    expect(a.cars.NOF).toBeUndefined()
+    expect(b.cars.RUS.x !== a.cars.RUS.x || b.cars.RUS.y !== a.cars.RUS.y).toBe(true)
   })
 })

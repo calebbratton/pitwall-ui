@@ -18,6 +18,11 @@ function Row({ d, followed, onFollow }: { d: TimingRow; followed: boolean; onFol
     <tr className={cls}>
       <td className="tt__pos">{d.retired ? '—' : (d.position ?? '')}</td>
       <td className="tt__drv">
+        <span
+          className="tt__colour"
+          aria-hidden="true"
+          style={d.team_colour ? { background: `#${d.team_colour}` } : undefined}
+        />
         <button
           type="button"
           className="tt__tla"

@@ -85,6 +85,20 @@ const GRID: Car[] = [
   { tla: 'STR', number: '18', team: 'Aston Martin', gap: 0, compound: 'SOFT', age: 5, retired: true },
 ]
 
+const TEAM_COLOUR: Record<string, string> = {
+  Mercedes: '00D7B6',
+  McLaren: 'FF8000',
+  'Red Bull Racing': '4781D7',
+  Ferrari: 'ED1131',
+  Alpine: '00A1E8',
+  'Haas F1 Team': '9C9FA2',
+  'Racing Bulls': '6C98FF',
+  Audi: 'F50537',
+  Williams: '1868DB',
+  Cadillac: 'AAAAAD',
+  'Aston Martin': '229971',
+}
+
 const LAP_TIME = 105 // Baku-ish, for "laps down"
 
 interface CarState {
@@ -106,6 +120,7 @@ function driverRows(order: Car[], state: Map<string, CarState>) {
       tla: c.tla,
       number: c.number,
       team: c.team,
+      team_colour: TEAM_COLOUR[c.team] ?? '',
       gap: s.retired ? null : Number(s.gap.toFixed(3)),
       laps_down: lapsDown,
       interval: s.retired || prevGap === null ? null : Number((s.gap - prevGap).toFixed(3)),
@@ -165,6 +180,7 @@ export function mockReplayScript(meeting: string, totalLaps = 51): MockFrame[] {
   }
 
   push(400, 'session', { meeting, session: 'Race', total_laps: totalLaps })
+  push(50, 'track', mockTrack())
   snap(29, 'GREEN')
   push(500, 'race_control', { lap: 29, category: 'Flag', message: 'WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:55:59' })
   push(400, 'radio', {
@@ -273,18 +289,70 @@ export function mockReplayScript(meeting: string, totalLaps = 51): MockFrame[] {
   return frames
 }
 
+// ---------- track + positions ----------
+
+const TRACK_STEPS = 240
+
+/** A closed, vaguely street-circuit-like loop: long straight, a kink and a tight hairpin end. */
+function trackPoint(u: number): [number, number] {
+  const t = u * 2 * Math.PI
+  return [Math.round(8000 * Math.cos(t) + 900 * Math.cos(3 * t)), Math.round(3200 * Math.sin(t) + 1300 * Math.sin(2 * t))]
+}
+
+export function mockTrack() {
+  const points = Array.from({ length: TRACK_STEPS }, (_, i) => trackPoint(i / TRACK_STEPS))
+  const xs = points.map((p) => p[0])
+  const ys = points.map((p) => p[1])
+  const at = (n: number, u: number) => {
+    const [x, y] = trackPoint(u)
+    return { number: n, x, y }
+  }
+  return {
+    source: 'traced',
+    name: 'Mock Street Circuit',
+    points,
+    bounds: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+    rotation: 0,
+    corners: [0.12, 0.23, 0.31, 0.45, 0.52, 0.64, 0.77, 0.88].map((u, i) => at(i + 1, u)),
+    marshal_sectors: Array.from({ length: 10 }, (_, i) => at(i + 1, i / 10)),
+  }
+}
+
+/** Car fixes `elapsedMs` into the mock replay; the field circulates at one lap per `lapMs`. */
+export function mockPositions(elapsedMs: number, lapMs: number) {
+  const cars = GRID.filter((c) => !c.retired).map((c) => {
+    const u = (((elapsedMs / lapMs - c.gap / LAP_TIME) % 1) + 1) % 1
+    const [x, y] = trackPoint(u)
+    return { number: c.number, tla: c.tla, x, y, status: 'OnTrack' }
+  })
+  // one car has no fix yet (the UI must ignore 0,0)
+  cars.push({ number: '99', tla: 'NOF', x: 0, y: 0, status: 'OnTrack' })
+  return { utc: new Date(Date.UTC(2026, 8, 26, 12) + elapsedMs).toISOString(), cars }
+}
+
 /** Replays the scripted frames on timers. Delays scale with the chosen speed (30x = as written). */
 export const openMockReplay: ReplayTransport = (params: ReplayParams, onEvent) => {
   const scale = Math.min(3, Math.max(0.2, 30 / params.speed))
   const frames = mockReplayScript(meetingFromPath(params.path) || params.meeting)
   let i = 0
   let timer: ReturnType<typeof setTimeout> | undefined
+  let ticker: ReturnType<typeof setInterval> | undefined
+  const emit = (name: string, data: unknown) => {
+    const event = parseReplayEvent(name, JSON.stringify(data))
+    if (event) onEvent(event)
+  }
+  const startPositions = () => {
+    const t0 = Date.now()
+    const lapMs = (LAP_TIME * 1000) / params.speed
+    ticker = setInterval(() => emit('positions', { type: 'positions', ...mockPositions(Date.now() - t0, lapMs) }), 250)
+  }
   const next = () => {
     if (i >= frames.length) return
     const frame = frames[i++]
     timer = setTimeout(() => {
-      const event = parseReplayEvent(frame.event, JSON.stringify(frame.data))
-      if (event) onEvent(event)
+      if (frame.event === 'end') clearInterval(ticker)
+      emit(frame.event, frame.data)
+      if (frame.event === 'track') startPositions()
       next()
     }, frame.delay * scale)
   }
@@ -292,5 +360,6 @@ export const openMockReplay: ReplayTransport = (params: ReplayParams, onEvent) =
   return () => {
     i = frames.length
     clearTimeout(timer)
+    clearInterval(ticker)
   }
 }

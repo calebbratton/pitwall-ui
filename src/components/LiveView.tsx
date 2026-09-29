@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useSyncExternalStore } from 'react'
 import type { ReplayEvent } from '../liveTypes'
 import { useFollow } from '../hooks/useFollow'
 import { useRadioPlayer } from '../hooks/useRadioPlayer'
@@ -10,6 +10,7 @@ import { RaceControlFeed } from './RaceControlFeed'
 import { RadioFeed } from './RadioFeed'
 import { ReplayControls } from './ReplayControls'
 import { TimingTower } from './TimingTower'
+import { TrackMap } from './TrackMap'
 import { TrackStatusBanner } from './TrackStatusBanner'
 
 interface Props {
@@ -42,7 +43,11 @@ export function LiveView({ useMock, hidden }: Props) {
     [follow, autoplay, enqueue],
   )
   const replay = useReplay(useMock, onEvent)
-  const { state } = replay
+  const { state, mapStore } = replay
+  // Boolean selector: LiveView re-renders only when the track appears/disappears, not on positions.
+  const hasTrack = useSyncExternalStore(mapStore.subscribe, () => mapStore.getSnapshot().track !== null)
+  // Hide the map when the session has no traceable track (timing arrived but no outline).
+  const showMap = hasTrack || !state.snapshot
 
   const setFollow = useCallback(
     (tla: string | null) => {
@@ -124,7 +129,17 @@ export function LiveView({ useMock, hidden }: Props) {
           </div>
         </div>
       )}
-      <div className="live__grid">
+      <div className={`live__grid${showMap ? ' has-map' : ''}`}>
+        {showMap && (
+          <TrackMap
+            store={mapStore}
+            drivers={snapshot?.drivers ?? []}
+            trackStatus={state.trackStatus}
+            follow={follow}
+            onFollow={setFollow}
+            yellowSectors={state.yellowSectors}
+          />
+        )}
         <TimingTower
           snapshot={snapshot}
           trackStatus={state.trackStatus}

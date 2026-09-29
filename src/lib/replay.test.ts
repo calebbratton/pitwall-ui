@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ReplayEvent, ReplayParams, ReplayState } from '../liveTypes'
 import {
+  applySectorFlag,
   filterRaceControl,
   formatGap,
   formatInterval,
@@ -140,6 +141,37 @@ describe('replayReducer', () => {
     expect(silent.latestTranscriptId).toBe(nor?.id) // empty transcript does not take the ticker
 
     expect(run([['radio_transcript', { url: 'nope', tla: 'X', text: 'hi' }]], silent)).toEqual(silent)
+  })
+})
+
+describe('marshal sector yellows', () => {
+  it('sets yellow / double yellow and clears on CLEAR IN TRACK SECTOR', () => {
+    let s = applySectorFlag({}, 'YELLOW IN TRACK SECTOR 7')
+    expect(s).toEqual({ 7: false })
+    s = applySectorFlag(s, 'DOUBLE YELLOW IN TRACK SECTOR 12')
+    expect(s).toEqual({ 7: false, 12: true })
+    s = applySectorFlag(s, 'CLEAR IN TRACK SECTOR 7')
+    expect(s).toEqual({ 12: true })
+    const same = applySectorFlag(s, 'SAFETY CAR DEPLOYED')
+    expect(same).toBe(s)
+    expect(applySectorFlag(s, 'CLEAR IN TRACK SECTOR 3')).toBe(s)
+  })
+
+  it('follows race control through the reducer and resets on a new replay', () => {
+    const s = run([
+      ['race_control', { lap: 30, category: 'Flag', message: 'YELLOW IN TRACK SECTOR 2' }],
+      ['race_control', { lap: 30, category: 'Flag', message: 'DOUBLE YELLOW IN TRACK SECTOR 4' }],
+      ['race_control', { lap: 30, category: 'Flag', message: 'CLEAR IN TRACK SECTOR 2' }],
+    ])
+    expect(s.yellowSectors).toEqual({ 4: true })
+    expect(replayReducer(s, { type: 'start', params }).yellowSectors).toEqual({})
+  })
+
+  it('leaves the main state untouched on map events (no tower re-render)', () => {
+    const s = run([['snapshot', { lap: 3, total_laps: 51, status: 'GREEN', drivers: [] }]])
+    const ev = parseReplayEvent('positions', JSON.stringify({ utc: 'u', cars: [{ tla: 'NOR', x: 1, y: 2 }] }))
+    if (!ev) throw new Error('parse')
+    expect(replayReducer(s, { type: 'event', event: ev })).toBe(s)
   })
 })
 

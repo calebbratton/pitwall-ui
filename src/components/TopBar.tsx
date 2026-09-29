@@ -8,14 +8,18 @@ const LABEL = {
   offline: 'OFFLINE',
 } as const
 
+export type ViewMode = 'chat' | 'live'
+
 interface Props {
+  mode: ViewMode
+  onMode: (mode: ViewMode) => void
   connection: Connection
   onNewSession: () => void
   panelOpen: boolean
   onTogglePanel: () => void
 }
 
-export function TopBar({ connection, onNewSession, panelOpen, onTogglePanel }: Props) {
+export function TopBar({ mode, onMode, connection, onNewSession, panelOpen, onTogglePanel }: Props) {
   const { state, forced } = connection
   const statusText =
     state === 'online'
@@ -39,6 +43,24 @@ export function TopBar({ connection, onNewSession, panelOpen, onTogglePanel }: P
         <span className="brand__sub">Strategy review</span>
       </div>
 
+      <nav className="modes" aria-label="View">
+        <button
+          type="button"
+          className="modes__btn"
+          aria-pressed={mode === 'chat'}
+          onClick={() => onMode('chat')}
+        >
+          <span className="modes__long">Strategy chat</span>
+          <span className="modes__short" aria-hidden="true">
+            Chat
+          </span>
+        </button>
+        <button type="button" className="modes__btn" aria-pressed={mode === 'live'} onClick={() => onMode('live')}>
+          <span className="modes__dot" aria-hidden="true" />
+          Live
+        </button>
+      </nav>
+
       <div className="topbar__right">
         <span className={`status status--${state}`} title={statusText}>
           <span className="status__light" aria-hidden="true" />
@@ -56,18 +78,22 @@ export function TopBar({ connection, onNewSession, panelOpen, onTogglePanel }: P
             <span className="switch__label">Mock</span>
           </label>
         )}
-        <button type="button" className="btn" onClick={onNewSession}>
-          New session
-        </button>
-        <button
-          type="button"
-          className="btn btn--panel"
-          onClick={onTogglePanel}
-          aria-expanded={panelOpen}
-          aria-controls="session-panel"
-        >
-          Session
-        </button>
+        {mode === 'chat' && (
+          <>
+            <button type="button" className="btn" onClick={onNewSession}>
+              New session
+            </button>
+            <button
+              type="button"
+              className="btn btn--panel"
+              onClick={onTogglePanel}
+              aria-expanded={panelOpen}
+              aria-controls="session-panel"
+            >
+              Session
+            </button>
+          </>
+        )}
       </div>
     </header>
   )

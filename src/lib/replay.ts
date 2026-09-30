@@ -7,6 +7,8 @@ import type {
   Prediction,
   PredictionRow,
   RaceControlItem,
+  RejoinKind,
+  RejoinRow,
   ReplayEvent,
   ReplayState,
   StreamParams,
@@ -49,6 +51,46 @@ function row(d: Rec): TimingRow {
     in_pit: d.in_pit === true,
     retired: d.retired === true,
   }
+}
+
+const REJOIN_KINDS: readonly RejoinKind[] = ['green', 'sc', 'vsc']
+
+function pitLoss(v: unknown): Record<RejoinKind, number> | null {
+  if (!isRecord(v)) return null
+  const out = {} as Record<RejoinKind, number>
+  for (const k of REJOIN_KINDS) {
+    const n = num(v[k])
+    if (n === null) return null
+    out[k] = n
+  }
+  return out
+}
+
+function rejoinTable(v: unknown): Record<string, RejoinRow[]> {
+  const out: Record<string, RejoinRow[]> = {}
+  if (!isRecord(v)) return out
+  for (const [tla, rows] of Object.entries(v)) {
+    if (!Array.isArray(rows)) continue
+    out[tla] = rows.filter(isRecord).flatMap((r): RejoinRow[] => {
+      const kind = REJOIN_KINDS.find((k) => k === r.kind)
+      const position = num(r.position)
+      const loss = num(r.loss)
+      if (!kind || position === null || loss === null) return []
+      return [
+        {
+          kind,
+          loss,
+          position,
+          ahead: typeof r.ahead === 'string' ? r.ahead : null,
+          gap_ahead: num(r.gap_ahead),
+          behind: typeof r.behind === 'string' ? r.behind : null,
+          gap_behind: num(r.gap_behind),
+          traffic: r.traffic === true,
+        },
+      ]
+    })
+  }
+  return out
 }
 
 function call(c: Rec): PitCall {
@@ -154,6 +196,9 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
         status: trackStatus(d.status),
         clock: typeof d.clock === 'string' ? d.clock : null,
         drivers: Array.isArray(d.drivers) ? d.drivers.filter(isRecord).map(row) : [],
+        lap_time_s: num(d.lap_time_s),
+        pit_loss: pitLoss(d.pit_loss),
+        rejoin: rejoinTable(d.rejoin),
       }
     case 'track_status':
       return { type: 'track_status', status: trackStatus(d.status), lap: num(d.lap) }

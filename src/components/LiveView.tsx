@@ -16,6 +16,7 @@ import { RaceControlFeed } from './RaceControlFeed'
 import { RadioFeed } from './RadioFeed'
 import { ReplayControls } from './ReplayControls'
 import { TimingTower } from './TimingTower'
+import { TrackLine } from './TrackLine'
 import { TrackMap } from './TrackMap'
 import { TrackStatusBanner } from './TrackStatusBanner'
 
@@ -252,6 +253,7 @@ export function LiveView({ useMock, hidden }: Props) {
         callsLap={latestCalls?.report.lap ?? null}
         predictionLap={latestPrediction?.prediction.lap ?? null}
       />
+      <TrackLine snapshot={snapshot} trackStatus={state.trackStatus} follow={follow} onFollow={setFollow} />
       {idle && (
         <p className="idle-note" role="status">
           Feed idle — showing the last session's final state.

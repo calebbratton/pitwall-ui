@@ -3171,3 +3171,122 @@ pre {
     animation: none;
   }
 }
+
+/* ---------- track line (field by gap, rejoin markers, battle) ---------- */
+
+.tl {
+  flex: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+  padding: 2px 12px 6px;
+}
+.tl__line {
+  position: relative;
+  height: 58px;
+}
+.tl__lap {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  top: 34px;
+  height: 2px;
+  background: var(--line-strong);
+}
+.tl__car {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  height: 42px;
+}
+.tl__car.is-low .tl__tla {
+  margin-bottom: 0;
+}
+.tl__car:not(.is-low) .tl__tla {
+  margin-bottom: 10px;
+}
+.tl__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 1.5px var(--bg);
+}
+.tl__tla {
+  font: 600 10px var(--font-mono);
+  color: var(--text-2);
+}
+.tl__car.is-follow .tl__dot {
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 0 0 3px var(--purple);
+}
+.tl__car.is-follow .tl__tla {
+  color: var(--text);
+}
+.tl__car:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+.tl__ghost {
+  position: absolute;
+  top: 24px;
+  height: 22px;
+  border-left: 2px dashed;
+  pointer-events: none;
+}
+.tl__ghost-label {
+  position: absolute;
+  top: 22px;
+  left: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font: 700 10px var(--font-mono);
+}
+.tl__ghost--green { border-color: var(--green); color: var(--green-text); }
+.tl__ghost--sc { border-color: var(--yellow); color: var(--yellow); }
+.tl__ghost--vsc { border-color: #fb923c; color: #fb923c; }
+@media (max-width: 700px) {
+  /* 20+ labels can't fit on a phone: only the followed car and its neighbours keep theirs */
+  .tl__car:not(.is-follow):not(.is-near) .tl__tla {
+    visibility: hidden;
+  }
+}
+.tl__info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.tl__closing { color: var(--green-text); }
+.tl__opening { color: var(--red-text); }
+.tl__tag {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--radius);
+  background: var(--purple-bg);
+  color: var(--purple-text);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.tl__rejoin {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.tl__rj--green { color: var(--green-text); }
+.tl__rj--sc { color: var(--yellow); }
+.tl__rj--vsc { color: #fb923c; }
+.tl__rj.is-traffic::after {
+  content: ' · traffic';
+  color: var(--red-text);
+}

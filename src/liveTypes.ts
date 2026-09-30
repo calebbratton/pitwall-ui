@@ -42,12 +42,34 @@ export interface TimingRow {
   retired: boolean
 }
 
+export type RejoinKind = 'green' | 'sc' | 'vsc'
+
+/** Where a car would come out if it pitted now (backend `rejoin`, measured circuit pit loss). */
+export interface RejoinRow {
+  kind: RejoinKind
+  /** seconds lost by this kind of stop */
+  loss: number
+  /** running position after the stop */
+  position: number
+  ahead: string | null
+  gap_ahead: number | null
+  behind: string | null
+  gap_behind: number | null
+  /** rejoins within 1.5 s of the car ahead (dirty air) */
+  traffic: boolean
+}
+
 export interface Snapshot {
   lap: number | null
   total_laps: number | null
   status: TrackStatus
   clock: string | null
   drivers: TimingRow[]
+  /** typical current green lap (s), for drawing the field on one line by gap */
+  lap_time_s?: number | null
+  pit_loss?: Record<RejoinKind, number> | null
+  /** per running car (TLA) */
+  rejoin?: Record<string, RejoinRow[]>
 }
 
 export type CallKind = 'PIT' | 'STAY OUT' | 'IN PIT' | 'RETIRED'

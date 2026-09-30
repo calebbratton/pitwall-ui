@@ -1235,24 +1235,6 @@ pre {
   flex-direction: column;
 }
 
-.live__grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 11fr) minmax(0, 10fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas:
-    'tower calls'
-    'tower predict'
-    'tower feeds';
-  gap: 1px;
-  background: var(--line);
-}
-.live__grid > * {
-  min-height: 0;
-  min-width: 0;
-  background: rgba(12, 14, 17, 0.94);
-}
 .live__side {
   grid-area: feeds;
   display: flex;
@@ -2249,11 +2231,6 @@ pre {
 }
 
 @media (min-width: 1500px) {
-  .live__grid {
-    grid-template-columns: minmax(0, 560px) minmax(0, 1fr) minmax(0, 420px);
-    grid-template-rows: minmax(0, 1fr);
-    grid-template-areas: 'tower calls feeds';
-  }
   .live__feeds {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(0, 1.2fr);
@@ -2415,40 +2392,9 @@ pre {
 
 /* map layouts: tower keeps full height; map sits above the calls */
 @media (min-width: 1101px) {
-  .live__grid.has-map {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 0.8fr);
-    grid-template-rows: minmax(0, 0.75fr) minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      'tower map feeds'
-      'tower calls feeds'
-      'tower predict feeds';
-  }
-  /* empty pit calls / prediction panels shrink to their text */
-  .live__grid.has-map:has(.calls:not(.pred).calls--empty) {
-    grid-template-rows: minmax(0, 1fr) auto minmax(0, 1.4fr);
-  }
-  .live__grid.has-map:has(.pred.calls--empty) {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1.4fr) auto;
-  }
-  .live__grid.has-map:has(.calls:not(.pred).calls--empty):has(.pred.calls--empty) {
-    grid-template-rows: minmax(0, 1fr) auto auto;
-  }
-  .has-map .live__feeds {
+  .live__feeds {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 0.8fr) minmax(0, 1.2fr);
-  }
-}
-@media (min-width: 1500px) {
-  .live__grid.has-map {
-    grid-template-columns: minmax(0, 560px) minmax(0, 1fr) minmax(0, 420px);
-  }
-}
-@media (min-width: 901px) and (max-width: 1100px) {
-  .live__grid.has-map {
-    grid-template-areas:
-      'map calls'
-      'tower predict'
-      'tower feeds';
   }
 }
 
@@ -2464,11 +2410,6 @@ pre {
   .live {
     overflow-y: auto;
     overscroll-behavior: contain;
-  }
-  .live__grid {
-    flex: none;
-    display: flex;
-    flex-direction: column;
   }
   .tt__scroll {
     flex: none;
@@ -3182,13 +3123,13 @@ pre {
 }
 .tl__line {
   position: relative;
-  height: 58px;
+  height: 66px;
 }
 .tl__lap {
   position: absolute;
   left: 2%;
   right: 2%;
-  top: 34px;
+  top: 42px;
   height: 2px;
   background: var(--line-strong);
 }
@@ -3204,13 +3145,16 @@ pre {
   border: 0;
   background: none;
   cursor: pointer;
-  height: 42px;
+  height: 48px;
 }
-.tl__car.is-low .tl__tla {
-  margin-bottom: 0;
+.tl__car--l1 .tl__tla {
+  margin-bottom: 11px;
 }
-.tl__car:not(.is-low) .tl__tla {
-  margin-bottom: 10px;
+.tl__car--l2 .tl__tla {
+  margin-bottom: 22px;
+}
+.tl__car--lx .tl__tla {
+  visibility: hidden;
 }
 .tl__dot {
   width: 10px;
@@ -3237,7 +3181,7 @@ pre {
 }
 .tl__ghost {
   position: absolute;
-  top: 24px;
+  top: 32px;
   height: 22px;
   border-left: 2px dashed;
   pointer-events: none;
@@ -3253,12 +3197,6 @@ pre {
 .tl__ghost--green { border-color: var(--green); color: var(--green-text); }
 .tl__ghost--sc { border-color: var(--yellow); color: var(--yellow); }
 .tl__ghost--vsc { border-color: #fb923c; color: #fb923c; }
-@media (max-width: 700px) {
-  /* 20+ labels can't fit on a phone: only the followed car and its neighbours keep theirs */
-  .tl__car:not(.is-follow):not(.is-near) .tl__tla {
-    visibility: hidden;
-  }
-}
 .tl__info {
   display: flex;
   flex-wrap: wrap;
@@ -3289,4 +3227,181 @@ pre {
 .tl__rj.is-traffic::after {
   content: ' · traffic';
   color: var(--red-text);
+}
+
+/* ---------- dashboard: columns of panels (move / minimise / maximise / hide) ---------- */
+
+.dash-bar-unused {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 10px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
+}
+.dash-menu {
+  position: relative;
+}
+.dash-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.dash-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.dash-menu__list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  font-size: 12px;
+}
+.dash-menu__list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.dash {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1px;
+  background: var(--line);
+}
+.dash__col {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+/* the old grid's proportions: timing | map + calls + prediction | feeds */
+.dash--3 .dash__col--0 { flex: 1 1 0; max-width: 560px; }
+.dash--3 .dash__col--1 { flex: 1.05 1 0; }
+.dash--3 .dash__col--2 { flex: 0.8 1 0; max-width: 460px; }
+.widget {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(12, 14, 17, 0.94);
+}
+/* empty pit calls / prediction panels shrink to their text, as before */
+.widget:has(.calls--empty) {
+  flex: none;
+}
+.widget.is-min {
+  flex: none;
+}
+.widget.is-min > .widget__body {
+  display: none;
+}
+.widget__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 4px 0 10px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
+}
+.widget__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.widget__btn {
+  flex: none;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.widget__btn:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}
+.widget__btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+/* move arrows: shown on hover / keyboard focus so the headers stay quiet */
+@media (hover: hover) {
+  .widget__btn--move {
+    opacity: 0;
+  }
+  .widget__head:hover .widget__btn--move,
+  .widget__head:focus-within .widget__btn--move {
+    opacity: 1;
+  }
+}
+.widget__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.widget__body > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+.dash.has-max .widget:not(.is-max),
+.dash.has-max .dash__col:not(:has(.is-max)) {
+  display: none;
+}
+.dash.has-max .dash__col {
+  max-width: none;
+}
+
+@media (max-width: 900px) {
+  /* phones: one stacked column, the page scrolls; maximise fills the screen */
+  .dash {
+    flex: none;
+    flex-direction: column;
+  }
+  .dash__col,
+  .widget {
+    flex: none;
+  }
+  .widget.is-max {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+  }
+  .widget.is-max > .widget__body {
+    overflow-y: auto;
+  }
+  .widget__btn {
+    width: 30px;
+    height: 28px;
+  }
+  .widget__head {
+    height: 30px;
+  }
 }

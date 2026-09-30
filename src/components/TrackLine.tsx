@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { Snapshot, TrackStatus } from '../liveTypes'
-import { battle, DEFAULT_LAP_S, drawGap, linePos, REJOIN_LABEL, trend } from '../lib/trackLine'
+import { battle, DEFAULT_LAP_S, drawGap, labelLevels, linePos, REJOIN_LABEL, trend } from '../lib/trackLine'
 
 interface Props {
   snapshot: Snapshot | null
@@ -29,6 +29,17 @@ const signed = (s: number | null) => (s === null ? '' : `${s > 0 ? '+' : ''}${s.
 export function TrackLine({ snapshot, trackStatus, follow, onFollow }: Props) {
   // per car: interval to the car ahead / from the car behind, by lap (for closing / pulling away)
   const [history, setHistory] = useState<{ lap: number | null; cars: Record<string, Sample[]> }>({ lap: null, cars: {} })
+  // Callback ref: the strip only mounts once there is a snapshot, so measure it when it appears.
+  const [width, setWidth] = useState(1000)
+  const observer = useRef<ResizeObserver | null>(null)
+  const lineRef = useCallback((el: HTMLDivElement | null) => {
+    observer.current?.disconnect()
+    observer.current = null
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    ro.observe(el)
+    observer.current = ro
+  }, [])
   const drivers = snapshot?.drivers ?? []
   const lap = snapshot?.lap ?? null
   if (lap !== null && lap !== history.lap) {
@@ -54,32 +65,45 @@ export function TrackLine({ snapshot, trackStatus, follow, onFollow }: Props) {
   const h = follow ? (history.cars[follow] ?? []) : []
   const aheadTrend = trend(h.map((r) => ({ lap: r.lap, gap: r.ahead })))
   const behindTrend = trend(h.map((r) => ({ lap: r.lap, gap: r.behind })))
+  const levels = labelLevels(
+    cars.map(({ d, pos }) => ({
+      tla: d.tla,
+      pos: pos * 0.96,
+      priority: d.tla === follow || d.tla === fight?.ahead?.tla || d.tla === fight?.behind?.tla,
+    })),
+    width,
+  )
+  const ghosts = rejoins.flatMap((r) => {
+    const pos = myGap === null ? null : linePos(myGap + r.loss, lapTime)
+    return pos === null ? [] : [{ r, pos }]
+  })
+  const ghostLevels = labelLevels(
+    ghosts.map(({ r, pos }) => ({ tla: r.kind, pos: pos * 0.96, priority: false })),
+    width,
+    58,
+  )
+  const ghostRows = Math.max(0, ...ghosts.map(({ r }) => ghostLevels.get(r.kind) ?? 0))
   const neutralised = trackStatus === 'SAFETY_CAR' || trackStatus === 'VSC' || trackStatus === 'VSC_ENDING'
 
   return (
     <section className="tl" aria-label="Track line: the field by gap to the leader">
-      <div className="tl__line" role="img" aria-label="Cars by gap to the leader; direction of travel to the right">
+      <div className="tl__line" ref={lineRef} style={{ height: 66 + 11 * ghostRows }} role="img" aria-label="Cars by gap to the leader; direction of travel to the right">
         <span className="tl__lap" />
-        {myGap !== null &&
-          rejoins.map((r) => {
-            const pos = linePos(myGap + r.loss, lapTime)
-            if (pos === null) return null
-            return (
-              <span key={r.kind} className={`tl__ghost tl__ghost--${r.kind}`} style={{ left: pct(pos) }}>
-                <span className="tl__ghost-label">
-                  {REJOIN_LABEL[r.kind]} P{r.position}
-                </span>
-              </span>
-            )
-          })}
-        {cars.map(({ d, pos }, i) => {
+        {ghosts.map(({ r, pos }) => (
+          <span key={r.kind} className={`tl__ghost tl__ghost--${r.kind}`} style={{ left: pct(pos) }}>
+            <span className="tl__ghost-label" style={{ top: 22 + 11 * (ghostLevels.get(r.kind) ?? 0) }}>
+              {REJOIN_LABEL[r.kind]} P{r.position}
+            </span>
+          </span>
+        ))}
+        {cars.map(({ d, pos }) => {
           const followed = d.tla === follow
-          const near = fight && (d.tla === fight.ahead?.tla || d.tla === fight.behind?.tla)
+          const level = levels.get(d.tla) ?? null
           return (
             <button
               type="button"
               key={d.tla}
-              className={`tl__car${followed ? ' is-follow' : ''}${near ? ' is-near' : ''}${i % 2 ? ' is-low' : ''}`}
+              className={`tl__car${followed ? ' is-follow' : ''} tl__car--l${level ?? 'x'}`}
               style={{ left: pct(pos) }}
               title={`P${d.position} ${d.tla} ${d.position === 1 ? 'leader' : `+${fmt(d.gap)}`}`}
               aria-pressed={followed}

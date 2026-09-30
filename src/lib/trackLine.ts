@@ -53,3 +53,26 @@ export function trend(history: { lap: number; gap: number | null }[], laps = 3):
 }
 
 export const REJOIN_LABEL: Record<RejoinRow['kind'], string> = { green: 'Green', sc: 'SC', vsc: 'VSC' }
+
+/**
+ * Label rows for the cars on the line: each label goes on the lowest of `levels` rows where it
+ * doesn't overlap a label already placed; priority cars (followed + neighbours) are placed first.
+ * Labels that fit nowhere get null (the dot stays; its name is in the tooltip).
+ */
+export function labelLevels(
+  cars: { tla: string; pos: number; priority: boolean }[],
+  widthPx: number,
+  labelPx = 30,
+  levels = 3,
+): Map<string, number | null> {
+  const minGap = widthPx > 0 ? labelPx / widthPx : 1
+  const rows: number[][] = Array.from({ length: levels }, () => [])
+  const out = new Map<string, number | null>()
+  const order = [...cars].sort((a, b) => Number(b.priority) - Number(a.priority))
+  for (const c of order) {
+    const level = rows.findIndex((placed) => placed.every((p) => Math.abs(p - c.pos) >= minGap))
+    if (level >= 0) rows[level].push(c.pos)
+    out.set(c.tla, level >= 0 ? level : null)
+  }
+  return out
+}

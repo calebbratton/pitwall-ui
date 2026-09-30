@@ -1,11 +1,26 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { LiveCurrent, ReplayEvent } from '../liveTypes'
+import { useColumns } from '../hooks/useColumns'
 import { useFollow } from '../hooks/useFollow'
 import { useLiveChat } from '../hooks/useLiveChat'
 import { useLiveCurrent } from '../hooks/useLiveCurrent'
 import { useRadioPlayer } from '../hooks/useRadioPlayer'
 import { useReplay } from '../hooks/useReplay'
 import { useSessions } from '../hooks/useSessions'
+import {
+  DEFAULT_LAYOUT,
+  fold,
+  type Layout,
+  loadLayout,
+  move,
+  saveLayout,
+  setHidden,
+  toggleMax,
+  toggleMin,
+  WIDGET_TITLE,
+  WIDGETS,
+  type WidgetId,
+} from '../lib/layout'
 import { liveTarget } from '../lib/liveApi'
 import { shouldAutoQueue } from '../lib/radioQueue'
 import { feedFinished } from '../lib/replay'
@@ -19,6 +34,7 @@ import { TimingTower } from './TimingTower'
 import { TrackLine } from './TrackLine'
 import { TrackMap } from './TrackMap'
 import { TrackStatusBanner } from './TrackStatusBanner'
+import { Widget } from './Widget'
 
 interface Props {
   useMock: boolean
@@ -49,6 +65,12 @@ export function LiveView({ useMock, hidden }: Props) {
   const [chatOpen, setChatOpen] = useState(false)
   const [mode, setMode] = useState<Mode>('live')
   const live = useLiveCurrent(useMock, !hidden)
+  const [layout, setLayout] = useState<Layout>(loadLayout)
+  const update = useCallback((next: Layout) => {
+    setLayout(next)
+    saveLayout(next)
+  }, [])
+  const nCols = useColumns()
 
   const sessions = useSessions(year, useMock)
   // Default to the latest race of the season until the user picks one.
@@ -224,65 +246,18 @@ export function LiveView({ useMock, hidden }: Props) {
   const latestPrediction = state.predictions.at(-1)
   const latestTranscript = state.radio.find((r) => r.id === state.latestTranscriptId) ?? null
 
-  return (
-    <div className="live" hidden={hidden}>
-      <ReplayControls
-        year={year}
-        onYear={(y) => {
-          setYear(y)
-          setPicked(null)
-        }}
-        sessions={sessions}
-        path={selected?.path ?? null}
-        onPath={setPicked}
-        speed={speed}
-        onSpeed={setSpeed}
-        fromLap={fromLap}
-        onFromLap={setFromLap}
-        maxLap={totalLaps}
-        replayActive={replayActive}
-        onPlay={play}
-        onStop={replay.stop}
-        now={now}
-        actions={actions}
-      />
-      <TrackStatusBanner
-        status={statusNow}
-        lap={lapNow}
-        totalLaps={totalLaps}
-        callsLap={latestCalls?.report.lap ?? null}
-        predictionLap={latestPrediction?.prediction.lap ?? null}
-      />
-      <TrackLine snapshot={snapshot} trackStatus={state.trackStatus} follow={follow} onFollow={setFollow} />
-      {idle && (
-        <p className="idle-note" role="status">
-          Feed idle — showing the last session's final state.
-        </p>
-      )}
-      {state.phase === 'error' && (
-        <div className="banner live__error" role="alert">
-          <span className="flag" aria-hidden="true" />
-          <p>
-            <strong>{onLive ? 'Live stream error.' : 'Replay error.'}</strong> {state.error}
-          </p>
-          <div className="banner__actions">
-            <button type="button" className="btn" onClick={retry}>
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
-      <div className={`live__grid${showMap ? ' has-map' : ''}`}>
-        {showMap && (
-          <TrackMap
-            store={mapStore}
-            drivers={snapshot?.drivers ?? []}
-            trackStatus={state.trackStatus}
-            follow={follow}
-            onFollow={setFollow}
-            yellowSectors={state.yellowSectors}
-          />
-        )}
+  const panels: Record<WidgetId, ReactNode> = {
+    map: (
+        <TrackMap
+          store={mapStore}
+          drivers={snapshot?.drivers ?? []}
+          trackStatus={state.trackStatus}
+          follow={follow}
+          onFollow={setFollow}
+          yellowSectors={state.yellowSectors}
+        />
+    ),
+    tower: (
         <TimingTower
           snapshot={snapshot}
           trackStatus={state.trackStatus}
@@ -292,7 +267,9 @@ export function LiveView({ useMock, hidden }: Props) {
           loading={state.phase === 'connecting'}
           emptyText={onLive ? 'Connected — waiting for timing data from the live feed.' : undefined}
         />
-        <PitCallsPanel sets={state.pitCalls} trackStatus={state.trackStatus} follow={follow} />
+    ),
+    calls: <PitCallsPanel sets={state.pitCalls} trackStatus={state.trackStatus} follow={follow} />,
+    predict: (
         <PredictionPanel
           sets={state.predictions}
           drivers={snapshot?.drivers ?? []}
@@ -301,6 +278,8 @@ export function LiveView({ useMock, hidden }: Props) {
           follow={follow}
           onFollow={setFollow}
         />
+    ),
+    side: (
         <div className={`live__side${chatOpen ? ' is-chat' : ''}`}>
           <div className="side__tabs" role="tablist" aria-label="Feeds or strategy channel">
             <button type="button" role="tab" aria-selected={!chatOpen} className="calls__tab" onClick={() => setChatOpen(false)}>
@@ -337,6 +316,120 @@ export function LiveView({ useMock, hidden }: Props) {
             onClose={() => setChatOpen(false)}
           />
         </div>
+    ),
+  }
+  const shownColumns = fold(layout.columns, nCols)
+    .map((col) => col.filter((id) => !layout.hidden.includes(id) && (id !== 'map' || showMap)))
+    .filter((col) => col.length > 0)
+  const panelsMenu = (
+    <details className="dash-menu">
+      <summary className="btn btn--xs">Panels</summary>
+      <div className="dash-menu__list">
+        <label>
+          <input
+            type="checkbox"
+            checked={!layout.lineHidden}
+            onChange={(e) => update({ ...layout, lineHidden: !e.target.checked })}
+          />{' '}
+          Track line
+        </label>
+        {WIDGETS.filter((id) => id !== 'map' || showMap).map((id) => (
+          <label key={id}>
+            <input
+              type="checkbox"
+              checked={!layout.hidden.includes(id)}
+              onChange={(e) => update(setHidden(layout, id, !e.target.checked))}
+            />{' '}
+            {WIDGET_TITLE[id]}
+          </label>
+        ))}
+        <button type="button" className="btn btn--xs" onClick={() => update(DEFAULT_LAYOUT)}>
+          Reset layout
+        </button>
+      </div>
+    </details>
+  )
+
+  return (
+    <div className="live" hidden={hidden}>
+      <ReplayControls
+        year={year}
+        onYear={(y) => {
+          setYear(y)
+          setPicked(null)
+        }}
+        sessions={sessions}
+        path={selected?.path ?? null}
+        onPath={setPicked}
+        speed={speed}
+        onSpeed={setSpeed}
+        fromLap={fromLap}
+        onFromLap={setFromLap}
+        maxLap={totalLaps}
+        replayActive={replayActive}
+        onPlay={play}
+        onStop={replay.stop}
+        now={now}
+        actions={
+          <>
+            {actions}
+            {panelsMenu}
+          </>
+        }
+      />
+      <TrackStatusBanner
+        status={statusNow}
+        lap={lapNow}
+        totalLaps={totalLaps}
+        callsLap={latestCalls?.report.lap ?? null}
+        predictionLap={latestPrediction?.prediction.lap ?? null}
+      />
+      {!layout.lineHidden && (
+        <TrackLine snapshot={snapshot} trackStatus={state.trackStatus} follow={follow} onFollow={setFollow} />
+      )}
+      {idle && (
+        <p className="idle-note" role="status">
+          Feed idle — showing the last session's final state.
+        </p>
+      )}
+      {state.phase === 'error' && (
+        <div className="banner live__error" role="alert">
+          <span className="flag" aria-hidden="true" />
+          <p>
+            <strong>{onLive ? 'Live stream error.' : 'Replay error.'}</strong> {state.error}
+          </p>
+          <div className="banner__actions">
+            <button type="button" className="btn" onClick={retry}>
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+      <div className={`dash dash--${nCols}${layout.maximized ? ' has-max' : ''}`}>
+        {shownColumns.map((col, ci) => (
+          <div key={ci} className={`dash__col dash__col--${ci}`}>
+            {col.map((id, i) => (
+              <Widget
+                key={id}
+                title={WIDGET_TITLE[id]}
+                minimized={layout.minimized.includes(id)}
+                maximized={layout.maximized === id}
+                moves={[
+                  ...(i > 0 ? (['up'] as const) : []),
+                  ...(i < col.length - 1 ? (['down'] as const) : []),
+                  ...(ci > 0 ? (['left'] as const) : []),
+                  ...(ci < shownColumns.length - 1 ? (['right'] as const) : []),
+                ]}
+                onMin={() => update(toggleMin(layout, id))}
+                onMax={() => update(toggleMax(layout, id))}
+                onHide={() => update(setHidden(layout, id, true))}
+                onMove={(dir) => update(move(layout, id, dir, nCols))}
+              >
+                {panels[id]}
+              </Widget>
+            ))}
+          </div>
+        ))}
       </div>
       {!chatOpen && (
         <button type="button" className="lchat-fab" onClick={() => setChatOpen(true)} aria-label="Open strategy channel">

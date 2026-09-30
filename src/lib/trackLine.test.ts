@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TimingRow } from '../liveTypes'
-import { battle, drawGap, linePos, trend } from './trackLine'
+import { battle, drawGap, labelLevels, linePos, trend } from './trackLine'
 
 const row = (tla: string, position: number, gap: number | null, interval: number | null): TimingRow => ({
   position,
@@ -47,5 +47,21 @@ describe('track line', () => {
     ]
     expect(trend(h)).toBe(-0.8)
     expect(trend(h.slice(0, 1))).toBeNull()
+  })
+})
+
+describe('label placement', () => {
+  it('stacks close labels and drops the ones that do not fit', () => {
+    const cars = ['A', 'B', 'C', 'D'].map((tla, i) => ({ tla, pos: 0.5 + i * 0.001, priority: false }))
+    const levels = labelLevels(cars, 1000)
+    expect([...levels.values()]).toEqual([0, 1, 2, null])
+    const spread = labelLevels([{ tla: 'X', pos: 0.1, priority: false }, { tla: 'Y', pos: 0.9, priority: false }], 1000)
+    expect([...spread.values()]).toEqual([0, 0])
+  })
+
+  it('places priority cars first', () => {
+    const cars = ['A', 'B', 'C', 'D'].map((tla) => ({ tla, pos: 0.5, priority: tla === 'D' }))
+    expect(labelLevels(cars, 1000).get('D')).toBe(0)
+    expect(labelLevels(cars, 1000).get('C')).toBeNull()
   })
 })

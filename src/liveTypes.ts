@@ -107,7 +107,55 @@ export interface CarFix {
   status: string
 }
 
+export type TyreRisk = 'low' | 'medium' | 'high'
+
+/** One car of a "who wins from here" prediction. */
+export interface PredictionRow {
+  tla: string
+  /** current running position */
+  position: number | null
+  /** expected finishing position (mean over the simulations) */
+  expected: number | null
+  /** 0..1 */
+  p_win: number
+  /** 0..1 */
+  p_podium: number
+  compound: Compound | null
+  /** Pirelli's actual compound this weekend ("C1" hardest .. "C5"/"C6" softest); SOFT/MEDIUM/HARD are relative */
+  compound_c: string | null
+  tyre_age: number | null
+  /** has already made a pit stop (the mandatory one) */
+  stopped: boolean
+  tyre_risk: TyreRisk | null
+  tyre_note: string
+}
+
+/** "Who wins from here": simulated finishes from the current race state (SSE `prediction` or /api/live/ask). */
+export interface Prediction {
+  lap: number | null
+  laps_remaining: number | null
+  status: TrackStatus
+  sims: number | null
+  /** ordered by current running position */
+  table: PredictionRow[]
+  notes: string[]
+}
+
+export type PredictionSource = 'event' | 'ask'
+
+export interface PredictionSet {
+  id: number
+  /** `event`: pushed at a SC/VSC deployment; `ask`: came with a chat answer */
+  source: PredictionSource
+  prediction: Prediction
+}
+
+/** Where the live session's data comes from: the real live timing feed, or an archived race (testing). */
+export type LiveSource = 'live' | 'replay'
+
 export type ReplayEvent =
+  | { type: 'live'; live_id: string; source: LiveSource }
+  | ({ type: 'prediction' } & Prediction)
   | ({ type: 'session' } & SessionHeader)
   | ({ type: 'snapshot' } & Snapshot)
   | { type: 'track_status'; status: TrackStatus; lap: number | null }
@@ -123,6 +171,8 @@ export type ReplayEvent =
 export type ReplayEventName = ReplayEvent['type']
 
 export const REPLAY_EVENT_NAMES: readonly ReplayEventName[] = [
+  'live',
+  'prediction',
   'session',
   'snapshot',
   'track_status',
@@ -183,6 +233,11 @@ export interface ReplayState {
   radio: RadioItem[]
   /** in arrival order (oldest first) */
   pitCalls: PitCallSet[]
+  /** server-side live session id (first SSE event `live`); keys /api/live/ask and the chat history */
+  liveId: string | null
+  liveSource: LiveSource | null
+  /** "who wins from here" history, in arrival order (oldest first) */
+  predictions: PredictionSet[]
   /** marshal sectors under yellow (from race control), sector number -> double yellow? */
   yellowSectors: Record<number, boolean>
   /** id of the radio clip whose non-empty transcript arrived most recently */

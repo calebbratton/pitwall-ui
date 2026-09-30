@@ -1240,9 +1240,10 @@ pre {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 11fr) minmax(0, 10fr);
-  grid-template-rows: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     'tower calls'
+    'tower predict'
     'tower feeds';
   gap: 1px;
   background: var(--line);
@@ -1252,8 +1253,44 @@ pre {
   min-width: 0;
   background: rgba(12, 14, 17, 0.94);
 }
-.live__feeds {
+.live__side {
   grid-area: feeds;
+  display: flex;
+  flex-direction: column;
+}
+.live__side > .live__feeds {
+  flex: 1;
+  min-height: 0;
+}
+.live__side:not(.is-chat) > .lchat,
+.live__side.is-chat > .live__feeds {
+  display: none;
+}
+.side__tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 4px 10px 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+  overflow-x: auto;
+}
+.side__tabs .calls__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.side__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--yellow);
+  animation: blink 0.8s steps(2) infinite;
+}
+.live__feeds {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1px;
@@ -2380,10 +2417,21 @@ pre {
 @media (min-width: 1101px) {
   .live__grid.has-map {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 0.8fr);
-    grid-template-rows: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 0.75fr) minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
       'tower map feeds'
-      'tower calls feeds';
+      'tower calls feeds'
+      'tower predict feeds';
+  }
+  /* empty pit calls / prediction panels shrink to their text */
+  .live__grid.has-map:has(.calls:not(.pred).calls--empty) {
+    grid-template-rows: minmax(0, 1fr) auto minmax(0, 1.4fr);
+  }
+  .live__grid.has-map:has(.pred.calls--empty) {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  }
+  .live__grid.has-map:has(.calls:not(.pred).calls--empty):has(.pred.calls--empty) {
+    grid-template-rows: minmax(0, 1fr) auto auto;
   }
   .has-map .live__feeds {
     grid-template-columns: minmax(0, 1fr);
@@ -2399,6 +2447,7 @@ pre {
   .live__grid.has-map {
     grid-template-areas:
       'map calls'
+      'tower predict'
       'tower feeds';
   }
 }
@@ -2440,6 +2489,29 @@ pre {
   .feed__list {
     flex: none;
     max-height: 420px;
+  }
+  .side__tabs {
+    display: none;
+  }
+  .live__side.is-chat > .live__feeds {
+    display: flex;
+  }
+  /* strategy channel: bottom sheet over the lower part of the screen, toggled by the FAB */
+  .live__side.is-chat > .lchat {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: min(70vh, 640px);
+    z-index: 30;
+    background: var(--bg);
+    border-top: 2px solid var(--purple);
+    box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.65);
+    animation: sheet-in 0.18s ease-out;
+  }
+  .lchat__list {
+    overscroll-behavior: contain;
   }
   .layout {
     grid-template-columns: minmax(0, 1fr);
@@ -2603,5 +2675,447 @@ pre {
   .composer__send {
     min-width: 64px;
     padding: 0 12px;
+  }
+}
+
+/* ---------- who wins from here ---------- */
+
+.pred {
+  grid-area: predict;
+}
+.pred__q {
+  margin-left: 2px;
+  color: var(--purple-text);
+}
+.pred__n {
+  margin-left: 1px;
+  font-size: 9px;
+  vertical-align: super;
+  color: var(--muted);
+}
+.pred__status {
+  font-weight: 700;
+  color: var(--text);
+}
+.pred__status--safety_car,
+.pred__status--vsc,
+.pred__status--vsc_ending {
+  color: var(--yellow);
+}
+.pred__status--red_flag {
+  color: var(--red-text);
+}
+.pred__status--green {
+  color: var(--green-text);
+}
+.pred__src {
+  color: var(--purple-text);
+}
+.pred__table td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.pred__drv {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pred__exp {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.pred__notes {
+  flex: none;
+  border-top: 1px solid var(--line);
+}
+.pred__notes summary {
+  padding: 4px 14px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+.pred__notes summary:hover {
+  color: var(--text);
+}
+.pred__notes .calls__assume {
+  border-top: 0;
+  padding-top: 0;
+}
+.pred .calls__head {
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+.pred__cc {
+  margin-left: 5px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.pred__win {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pred__win b {
+  min-width: 34px;
+  text-align: right;
+}
+.pred__bar {
+  width: 70px;
+  height: 7px;
+  background: var(--bg-3);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.pred__bar span {
+  display: block;
+  height: 100%;
+  width: var(--w);
+  background: var(--purple);
+}
+.pred__podium,
+.pred__podium-h {
+  color: var(--text-2);
+  text-align: right;
+}
+.badge--stopped {
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  color: var(--green-text);
+}
+.badge--tostop {
+  border: 1px dashed var(--yellow);
+  color: var(--yellow);
+}
+.risk {
+  appearance: none;
+  cursor: help;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 1px 6px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  line-height: 1.3;
+}
+.risk--low {
+  background: transparent;
+  border-color: rgba(34, 197, 94, 0.55);
+  color: var(--green-text);
+}
+.risk--medium {
+  background: var(--yellow-bg);
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+.risk--high {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.risk[aria-expanded='true'] {
+  box-shadow: 0 0 0 1px var(--text);
+}
+.pred__note td {
+  white-space: normal;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--text-2);
+  background: var(--bg-2);
+}
+
+/* ---------- strategy channel (live chat) ---------- */
+
+.lchat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lchat__bar .live-h {
+  flex: 1;
+}
+.lchat__tx {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--green-text);
+}
+.lchat__tx.is-rx {
+  color: var(--yellow);
+  animation: blink 1s steps(2) infinite;
+}
+.lchat__close {
+  display: none;
+}
+.lchat__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 8px;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.lchat__intro {
+  padding: 10px 0;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.lchat__msg {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.lchat__msg:last-child {
+  border-bottom: 0;
+}
+.lchat__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 5px;
+}
+.lchat__head .msg__who {
+  font-size: 11px;
+}
+.lchat__who--user {
+  background: var(--text);
+  color: var(--bg);
+}
+.lchat__who--agent {
+  background: var(--purple);
+  color: #fff;
+}
+.lchat__head .msg__time {
+  margin-left: auto;
+}
+.lchat__at {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lchat__ago {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.lchat__q {
+  font-size: 14px;
+}
+.lchat__q::before {
+  content: '“';
+  color: var(--muted);
+}
+.lchat__q::after {
+  content: '”';
+  color: var(--muted);
+}
+.lchat__msg .md {
+  font-size: 14px;
+}
+.lchat__pred {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--purple);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  text-decoration: none;
+}
+.lchat__pred:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+.lchat__pred b {
+  color: var(--text);
+}
+.lchat__pred-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--purple-text);
+}
+.lchat__msg .steplog {
+  margin-top: 6px;
+}
+.lchat__closed {
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid var(--yellow);
+  background: var(--yellow-bg);
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.lchat__chips {
+  display: flex;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.lchat__chip {
+  white-space: nowrap;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--purple);
+  color: var(--text);
+  padding: 3px 9px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+}
+.lchat__chip:hover:not(:disabled) {
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+  border-left-color: var(--purple);
+}
+.lchat__chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.lchat__composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, #111317, #0b0d10);
+  border-top: 1px solid var(--line);
+}
+.lchat__composer .composer__input {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+.lchat__composer .composer__input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.lchat__composer .composer__send {
+  min-width: 72px;
+  padding: 0 12px;
+}
+
+/* driver codes in answers, with the team colour */
+.tla {
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 0 3px 0 4px;
+  border-left: 3px solid var(--team, var(--line-strong));
+  background: var(--bg-3);
+  border-radius: 1px;
+}
+.tla.is-followed {
+  color: var(--purple-text);
+  box-shadow: inset 0 -1px 0 var(--purple-text);
+}
+
+.lchat-fab {
+  display: none;
+  position: fixed;
+  right: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 25;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--purple);
+  color: #fff;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6);
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+  }
+}
+
+/* live session bar: test replay options collapsed by default */
+.rc-bar__test {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 4px;
+}
+.rc-bar__quick {
+  font-style: italic;
+  font-weight: 900;
+}
+.rc-bar__quick.is-stop {
+  border-color: var(--red);
+  color: var(--red-text);
+}
+.rc-bar__quick:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rc-bar.is-open .rc-bar__form {
+  flex-basis: 100%;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line-strong);
+}
+.rc-bar__form[hidden] {
+  display: none;
+}
+.tag--phase-running::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--red);
+  vertical-align: 1px;
+  animation: blink 1.2s steps(2) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live__side.is-chat > .lchat {
+    animation: none;
+  }
+}
+@media (max-width: 640px) {
+  .pred__exp,
+  .pred__podium,
+  .pred__podium-h {
+    display: none;
+  }
+  .pred__bar {
+    width: 24px;
+  }
+  .pred__table td,
+  .pred__table th {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .pred__win b {
+    min-width: 28px;
+  }
+}
+@media (max-width: 900px) {
+  .lchat__close {
+    display: inline-block;
+  }
+  .lchat-fab {
+    display: inline-flex;
   }
 }

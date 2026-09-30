@@ -1,11 +1,14 @@
 import { useCallback, useState, useSyncExternalStore } from 'react'
 import type { ReplayEvent } from '../liveTypes'
 import { useFollow } from '../hooks/useFollow'
+import { useLiveChat } from '../hooks/useLiveChat'
 import { useRadioPlayer } from '../hooks/useRadioPlayer'
 import { useReplay } from '../hooks/useReplay'
 import { useSessions } from '../hooks/useSessions'
 import { shouldAutoQueue } from '../lib/radioQueue'
+import { LiveChat } from './LiveChat'
 import { PitCallsPanel } from './PitCallsPanel'
+import { PredictionPanel } from './PredictionPanel'
 import { RaceControlFeed } from './RaceControlFeed'
 import { RadioFeed } from './RadioFeed'
 import { ReplayControls } from './ReplayControls'
@@ -24,6 +27,8 @@ export function LiveView({ useMock, hidden }: Props) {
   const [speed, setSpeed] = useState(30)
   const [fromLap, setFromLap] = useState('')
   const [autoplay, setAutoplayState] = useState(false)
+  // strategy channel: a tab next to the feeds on desktop, a bottom sheet on mobile
+  const [chatOpen, setChatOpen] = useState(false)
 
   const sessions = useSessions(year, useMock)
   // Default to the latest race of the season until the user picks one.
@@ -48,6 +53,20 @@ export function LiveView({ useMock, hidden }: Props) {
   const hasTrack = useSyncExternalStore(mapStore.subscribe, () => mapStore.getSnapshot().track !== null)
   // Hide the map when the session has no traceable track (timing arrived but no outline).
   const showMap = hasTrack || !state.snapshot
+
+  const chatEnabled = state.liveId !== null && (state.phase === 'running' || state.phase === 'ended')
+  const chat = useLiveChat(state.liveId, chatEnabled, useMock, replay.addPrediction)
+  const closedHint = chatEnabled
+    ? null
+    : state.phase === 'idle'
+      ? 'No live session. Start one (test replay, top right) to open the strategy channel.'
+      : state.phase === 'connecting'
+        ? 'Connecting to the live session…'
+        : state.phase === 'stopped'
+          ? 'Session stopped. Strategy answers questions about a running live session only.'
+          : state.phase === 'error'
+            ? 'Live session lost. Retry to reopen the channel.'
+            : 'Waiting for the live session id from the server…'
 
   const setFollow = useCallback(
     (tla: string | null) => {
@@ -87,6 +106,8 @@ export function LiveView({ useMock, hidden }: Props) {
         ? `${selected.meeting} — Race`
         : null
   const latestCalls = state.pitCalls.at(-1)
+  const latestPrediction = state.predictions.at(-1)
+  const testReplay = state.liveSource === 'replay' || (state.liveSource === null && state.params !== null)
   const latestTranscript = state.radio.find((r) => r.id === state.latestTranscriptId) ?? null
 
   return (
@@ -109,12 +130,14 @@ export function LiveView({ useMock, hidden }: Props) {
         onPlay={play}
         onStop={replay.stop}
         title={title}
+        testReplay={testReplay}
       />
       <TrackStatusBanner
         status={state.trackStatus}
         lap={snapshot?.lap ?? null}
         totalLaps={totalLaps}
         callsLap={latestCalls?.report.lap ?? null}
+        predictionLap={latestPrediction?.prediction.lap ?? null}
       />
       {state.phase === 'error' && (
         <div className="banner live__error" role="alert">
@@ -149,7 +172,29 @@ export function LiveView({ useMock, hidden }: Props) {
           loading={state.phase === 'connecting'}
         />
         <PitCallsPanel sets={state.pitCalls} trackStatus={state.trackStatus} follow={follow} />
-        <div className="live__feeds">
+        <PredictionPanel
+          sets={state.predictions}
+          drivers={snapshot?.drivers ?? []}
+          totalLaps={totalLaps}
+          trackStatus={state.trackStatus}
+          follow={follow}
+          onFollow={setFollow}
+        />
+        <div className={`live__side${chatOpen ? ' is-chat' : ''}`}>
+          <div className="side__tabs" role="tablist" aria-label="Feeds or strategy channel">
+            <button type="button" role="tab" aria-selected={!chatOpen} className="calls__tab" onClick={() => setChatOpen(false)}>
+              Race control · Radio
+            </button>
+            <button type="button" role="tab" aria-selected={chatOpen} className="calls__tab" onClick={() => setChatOpen(true)}>
+              Strategy channel
+              {chat.state.pending ? (
+                <span className="side__dot" aria-label="answer pending" />
+              ) : (
+                chat.state.messages.length > 0 && <span className="count">{chat.state.messages.length}</span>
+              )}
+            </button>
+          </div>
+          <div className="live__feeds">
           <RaceControlFeed items={state.raceControl} />
           <RadioFeed
             items={state.radio}
@@ -160,8 +205,24 @@ export function LiveView({ useMock, hidden }: Props) {
             onAutoplay={setAutoplay}
             player={player}
           />
+          </div>
+          <LiveChat
+            chat={chat}
+            closedHint={closedHint}
+            lap={snapshot?.lap ?? null}
+            status={state.trackStatus}
+            drivers={snapshot?.drivers ?? []}
+            follow={follow}
+            onClose={() => setChatOpen(false)}
+          />
         </div>
       </div>
+      {!chatOpen && (
+        <button type="button" className="lchat-fab" onClick={() => setChatOpen(true)} aria-label="Open strategy channel">
+          <span aria-hidden="true">📻</span> Ask strategy
+          {chat.state.pending && <span className="side__dot" aria-hidden="true" />}
+        </button>
+      )}
       <audio ref={bindAudio} onEnded={onEnded} onError={onError} preload="none" hidden />
     </div>
   )

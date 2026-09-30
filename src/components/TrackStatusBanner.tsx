@@ -8,6 +8,8 @@ interface Props {
   totalLaps: number | null
   /** there are pit wall calls for the current neutralisation */
   callsLap: number | null
+  /** lap of the latest "who wins from here" prediction */
+  predictionLap?: number | null
 }
 
 const HINT: Partial<Record<TrackStatus, string>> = {
@@ -18,7 +20,7 @@ const HINT: Partial<Record<TrackStatus, string>> = {
   RED_FLAG: 'Session suspended',
 }
 
-export function TrackStatusBanner({ status, lap, totalLaps, callsLap }: Props) {
+export function TrackStatusBanner({ status, lap, totalLaps, callsLap, predictionLap = null }: Props) {
   const s = status ?? 'UNKNOWN'
   const neutral = NEUTRALISED.includes(s)
   return (
@@ -27,7 +29,7 @@ export function TrackStatusBanner({ status, lap, totalLaps, callsLap }: Props) {
       <span className="tsb__label">{status ? STATUS_LABEL[s] : 'NO SESSION'}</span>
       {lap !== null && (
         <span className="tsb__lap">
-          LAP {lap}
+          LIVE · LAP {lap}
           {totalLaps ? `/${totalLaps}` : ''}
         </span>
       )}
@@ -35,6 +37,11 @@ export function TrackStatusBanner({ status, lap, totalLaps, callsLap }: Props) {
       {neutral && callsLap !== null && (
         <a className="tsb__jump" href="#pit-calls">
           Pit wall calls ↓
+        </a>
+      )}
+      {neutral && predictionLap !== null && (
+        <a className="tsb__jump" href="#who-wins">
+          Who wins ↓
         </a>
       )}
     </div>

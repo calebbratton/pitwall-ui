@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { LiveSessionInfo, ReplayPhase } from '../liveTypes'
 import type { Sessions } from '../hooks/useSessions'
 
@@ -23,12 +24,14 @@ interface Props {
   onStop: () => void
   /** "Azerbaijan Grand Prix — Race" once known */
   title: string | null
+  /** the live session is fed by an archived race (testing), not the real live timing feed */
+  testReplay: boolean
 }
 
 const PHASE_TEXT: Record<ReplayPhase, string> = {
-  idle: 'READY',
-  connecting: 'LOADING',
-  running: 'PLAYING',
+  idle: 'NO SESSION',
+  connecting: 'CONNECTING',
+  running: 'LIVE',
   ended: 'FINISHED',
   stopped: 'STOPPED',
   error: 'ERROR',
@@ -38,12 +41,52 @@ function raceLabel(s: LiveSessionInfo) {
   return `${s.date.slice(5)} · ${s.meeting.replace(/ Grand Prix$/, ' GP')}`
 }
 
+/**
+ * Live session bar: what's on screen and its state. Test replays (an archived race played as if live)
+ * are a dev/testing affordance between race weekends, so their options sit in a collapsed group.
+ */
 export function ReplayControls(p: Props) {
+  const [open, setOpen] = useState(false)
   const active = p.phase === 'connecting' || p.phase === 'running'
   const { sessions, loading, error } = p.sessions
+  const selected = sessions.find((s) => s.path === p.path)
   return (
-    <div className="rc-bar">
+    <div className={`rc-bar${open ? ' is-open' : ''}`}>
+      <div className="rc-bar__now">
+        <span className={`tag tag--phase-${p.phase}`}>{PHASE_TEXT[p.phase]}</span>
+        {p.testReplay && (
+          <span className="replay-badge" title="Archived race replayed as if live, for testing">
+            TEST REPLAY
+          </span>
+        )}
+        <span className="rc-bar__title">{p.title ?? 'No live session'}</span>
+      </div>
+      <div className="rc-bar__test">
+        {!open && (
+          <button
+            type="button"
+            className={`btn btn--xs rc-bar__quick ${active ? 'is-stop' : ''}`}
+            disabled={!active && !p.path}
+            title={active ? 'Stop the test replay' : selected ? `Test replay: ${raceLabel(selected)}, ${p.speed}x` : undefined}
+            onClick={active ? p.onStop : p.onPlay}
+          >
+            {active ? '■ Stop' : '▶ Test replay'}
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn--xs rc-bar__toggle"
+          aria-expanded={open}
+          aria-controls="test-replay"
+          onClick={() => setOpen(!open)}
+        >
+          {open ? 'Test replay ▴' : 'Options ▾'}
+        </button>
+      </div>
       <form
+        id="test-replay"
+        hidden={!open}
+        aria-label="Test replay"
         className="rc-bar__form"
         onSubmit={(e) => {
           e.preventDefault()
@@ -105,16 +148,9 @@ export function ReplayControls(p: Props) {
           className={`btn rc-bar__play ${active ? 'is-stop' : 'btn--primary'}`}
           disabled={!active && !p.path}
         >
-          {active ? '■ Stop' : '▶ Play'}
+          {active ? '■ Stop' : '▶ Play test replay'}
         </button>
       </form>
-      <div className="rc-bar__now">
-        <span className="replay-badge" title="Archived race replayed as if live">
-          REPLAY
-        </span>
-        <span className="rc-bar__title">{p.title ?? 'Pick a race and press play'}</span>
-        <span className={`tag tag--phase-${p.phase}`}>{PHASE_TEXT[p.phase]}</span>
-      </div>
       {error && (
         <p className="rc-bar__err" role="alert">
           Could not load races: {error}

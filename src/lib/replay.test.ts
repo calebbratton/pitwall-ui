@@ -213,3 +213,61 @@ describe('timing formatters', () => {
     expect(formatGap(row({ position: 5, gap: null }))).toBe('—')
   })
 })
+
+const predRow = (o: Record<string, unknown>) => ({
+  tla: 'RUS', position: 1, expected: 1.8, p_win: 0.52, p_podium: 0.9, compound: 'MEDIUM', compound_c: 'C4',
+  tyre_age: 32, stopped: false, tyre_risk: 'high', tyre_note: '32 laps old; 12 past the longest 2026 medium stint here', ...o,
+})
+const prediction = (lap: number, status = 'SAFETY_CAR', table = [predRow({})]) => ({
+  lap, laps_remaining: 51 - lap, status, sims: 2000, table, notes: ['n1'],
+})
+
+describe('live session + predictions', () => {
+  it('stores the live_id and source from the first `live` event', () => {
+    const s = run([['live', { live_id: 'abc-123', source: 'replay' }]])
+    expect(s.liveId).toBe('abc-123')
+    expect(s.liveSource).toBe('replay')
+    expect(run([['live', { live_id: 'x', source: 'live' }]]).liveSource).toBe('live')
+    expect(parseReplayEvent('live', '{"source":"replay"}')).toBeNull() // no id
+    expect(replayReducer(s, { type: 'start', params }).liveId).toBeNull() // new run, new session
+  })
+
+  it('parses prediction rows defensively', () => {
+    const e = parseReplayEvent(
+      'prediction',
+      JSON.stringify(prediction(31, 'SAFETY_CAR', [
+        predRow({}),
+        predRow({ tla: 'PIA', position: 2, p_win: 1.7, p_podium: -1, compound: 'X', compound_c: 'nope', tyre_risk: 'EXTREME', stopped: 'yes' }),
+      ])),
+    )
+    expect(e?.type).toBe('prediction')
+    if (e?.type !== 'prediction') return
+    expect(e).toMatchObject({ lap: 31, laps_remaining: 20, status: 'SAFETY_CAR', sims: 2000, notes: ['n1'] })
+    expect(e.table[0]).toMatchObject({ tla: 'RUS', p_win: 0.52, compound: 'MEDIUM', compound_c: 'C4', tyre_risk: 'high', stopped: false })
+    expect(e.table[1]).toMatchObject({ p_win: 1, p_podium: 0, compound: null, compound_c: null, tyre_risk: null, stopped: false })
+    expect(parseReplayEvent('prediction', '{"lap":3}')).toBeNull() // no table
+  })
+
+  it('keeps every prediction (events and chat answers) in order, only for the current live_id', () => {
+    let s = run([
+      ['live', { live_id: 'L1', source: 'replay' }],
+      ['prediction', prediction(31)],
+      ['prediction', prediction(36, 'VSC')],
+    ])
+    expect(s.predictions.map((p) => [p.source, p.prediction.lap, p.prediction.status])).toEqual([
+      ['event', 31, 'SAFETY_CAR'],
+      ['event', 36, 'VSC'],
+    ])
+    const asked = { ...prediction(38, 'GREEN'), status: 'GREEN' as const, table: [] }
+    s = replayReducer(s, { type: 'prediction', liveId: 'L1', prediction: asked })
+    expect(s.predictions.at(-1)).toMatchObject({ source: 'ask', prediction: { lap: 38 } })
+    expect(new Set(s.predictions.map((p) => p.id)).size).toBe(3)
+    // a late answer for an old session is dropped
+    expect(replayReducer(s, { type: 'prediction', liveId: 'OLD', prediction: asked })).toBe(s)
+    // and chat predictions still land after the race ended
+    const ended = run([['end', {}]], s)
+    expect(replayReducer(ended, { type: 'prediction', liveId: 'L1', prediction: asked }).predictions).toHaveLength(4)
+    // a new run starts with an empty history
+    expect(replayReducer(s, { type: 'start', params }).predictions).toEqual([])
+  })
+})

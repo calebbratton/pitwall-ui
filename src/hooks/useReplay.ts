@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import type { ReplayEvent, ReplayParams, ReplayState, ReplayTransport } from '../liveTypes'
+import type { Prediction, ReplayEvent, ReplayParams, ReplayState, ReplayTransport } from '../liveTypes'
 import { openReplay } from '../lib/liveApi'
 import { openMockReplay } from '../lib/mockReplay'
 import { initialReplayState, replayReducer } from '../lib/replay'
@@ -12,6 +12,8 @@ export interface Replay {
   mapStore: MapStore
   start: (params: ReplayParams) => void
   stop: () => void
+  /** add a prediction that came with a chat answer (dropped unless `liveId` is still the current session) */
+  addPrediction: (liveId: string, prediction: Prediction) => void
 }
 
 /**
@@ -61,7 +63,12 @@ export function useReplay(useMock: boolean, onEvent?: (event: ReplayEvent) => vo
     dispatch({ type: 'stop' })
   }, [close])
 
+  const addPrediction = useCallback(
+    (liveId: string, prediction: Prediction) => dispatch({ type: 'prediction', liveId, prediction }),
+    [],
+  )
+
   useEffect(() => close, [close])
 
-  return { state, mapStore, start, stop }
+  return { state, mapStore, start, stop, addPrediction }
 }

@@ -121,7 +121,7 @@ export function TrackMap({ store, drivers, trackStatus, follow, onFollow, yellow
   if (!geo) {
     return (
       <section className="tm tm--empty" aria-label="Track map">
-        <p className="muted">The track map appears when the replay starts.</p>
+        <p className="muted">The track map appears when a live session starts.</p>
       </section>
     )
   }

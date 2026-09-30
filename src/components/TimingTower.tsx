@@ -96,7 +96,7 @@ export function TimingTower({ snapshot, trackStatus, follow, onFollow, latestTra
           <p className="tt__empty">
             {loading
               ? 'Loading the archive… the first replay of a race downloads it (a few seconds).'
-              : 'Timing appears here once the replay starts.'}
+              : 'Timing appears here once a live session starts.'}
           </p>
         )}
       </div>

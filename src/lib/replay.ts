@@ -3,6 +3,9 @@ import type {
   CallKind,
   PitCall,
   PitCallReport,
+  PredictionSet,
+  Prediction,
+  PredictionRow,
   RaceControlItem,
   ReplayEvent,
   ReplayParams,
@@ -11,6 +14,7 @@ import type {
   TimingRow,
   TrackMarker,
   TrackStatus,
+  TyreRisk,
 } from '../liveTypes'
 import { TRACK_STATUSES } from '../liveTypes'
 import type { Compound } from './format'
@@ -71,6 +75,39 @@ function report(r: Rec): PitCallReport {
   }
 }
 
+const RISKS: readonly string[] = ['low', 'medium', 'high']
+const prob = (v: unknown): number => Math.min(1, Math.max(0, num(v) ?? 0))
+
+function predictionRow(r: Rec): PredictionRow {
+  const risk = typeof r.tyre_risk === 'string' ? r.tyre_risk.toLowerCase() : ''
+  return {
+    tla: str(r.tla, '???'),
+    position: num(r.position),
+    expected: num(r.expected),
+    p_win: prob(r.p_win),
+    p_podium: prob(r.p_podium),
+    compound: compound(r.compound),
+    compound_c: typeof r.compound_c === 'string' && /^C\d$/i.test(r.compound_c) ? r.compound_c.toUpperCase() : null,
+    tyre_age: num(r.tyre_age),
+    stopped: r.stopped === true,
+    tyre_risk: RISKS.includes(risk) ? (risk as TyreRisk) : null,
+    tyre_note: str(r.tyre_note),
+  }
+}
+
+/** Parse a prediction payload (SSE `prediction` data, or the `prediction` of an /api/live/ask response). */
+export function parsePrediction(d: unknown): Prediction | null {
+  if (!isRecord(d) || !Array.isArray(d.table)) return null
+  return {
+    lap: num(d.lap),
+    laps_remaining: num(d.laps_remaining),
+    status: trackStatus(d.status),
+    sims: num(d.sims),
+    table: d.table.filter(isRecord).map(predictionRow),
+    notes: Array.isArray(d.notes) ? d.notes.map((n) => str(n)).filter(Boolean) : [],
+  }
+}
+
 const isPoint = (p: unknown): p is [number, number] =>
   Array.isArray(p) && p.length >= 2 && num(p[0]) !== null && num(p[1]) !== null
 
@@ -99,6 +136,14 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
   }
   if (!isRecord(d)) return name === 'end' ? { type: 'end' } : null
   switch (name) {
+    case 'live': {
+      const id = typeof d.live_id === 'string' && d.live_id ? d.live_id : null
+      return id ? { type: 'live', live_id: id, source: d.source === 'live' ? 'live' : 'replay' } : null
+    }
+    case 'prediction': {
+      const p = parsePrediction(d)
+      return p ? { type: 'prediction', ...p } : null
+    }
     case 'session':
       return { type: 'session', meeting: str(d.meeting), session: str(d.session), total_laps: num(d.total_laps) }
     case 'snapshot':
@@ -181,6 +226,7 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
 
 export const RACE_CONTROL_CAP = 300
 export const RADIO_CAP = 60
+export const PREDICTION_CAP = 30
 
 export const initialReplayState: ReplayState = {
   phase: 'idle',
@@ -192,6 +238,9 @@ export const initialReplayState: ReplayState = {
   raceControl: [],
   radio: [],
   pitCalls: [],
+  liveId: null,
+  liveSource: null,
+  predictions: [],
   latestTranscriptId: null,
   yellowSectors: {},
   seq: 0,
@@ -201,12 +250,30 @@ export type ReplayAction =
   | { type: 'start'; params: ReplayParams }
   | { type: 'event'; event: ReplayEvent }
   | { type: 'stop' }
+  /** a prediction that came back with a chat answer; ignored unless it belongs to the current live session */
+  | { type: 'prediction'; liveId: string; prediction: Prediction }
 
-/** Pure state machine for one replay run. Events outside connecting/running are ignored. */
+function addPrediction(state: ReplayState, source: PredictionSet['source'], prediction: Prediction): ReplayState {
+  const seq = state.seq + 1
+  return {
+    ...state,
+    seq,
+    predictions: [...state.predictions, { id: seq, source, prediction }].slice(-PREDICTION_CAP),
+  }
+}
+
+/**
+ * Pure state machine for one live session (a test replay today). Stream events outside
+ * connecting/running are ignored; chat predictions are accepted for the current live_id in any phase.
+ */
 export function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
   switch (action.type) {
     case 'start':
       return { ...initialReplayState, phase: 'connecting', params: action.params }
+    case 'prediction':
+      return state.liveId !== null && action.liveId === state.liveId
+        ? addPrediction(state, 'ask', action.prediction)
+        : state
     case 'stop':
       return state.phase === 'connecting' || state.phase === 'running' ? { ...state, phase: 'stopped' } : state
     case 'event':
@@ -220,6 +287,13 @@ export function replayReducer(state: ReplayState, action: ReplayAction): ReplayS
 function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
   const seq = state.seq + 1
   switch (e.type) {
+    case 'live':
+      return { ...state, liveId: e.live_id, liveSource: e.source }
+    case 'prediction': {
+      const { type: _type, ...prediction } = e
+      void _type
+      return addPrediction(state, 'event', prediction)
+    }
     case 'session':
       return { ...state, session: { meeting: e.meeting, session: e.session, total_laps: e.total_laps } }
     case 'snapshot': {
@@ -345,4 +419,11 @@ export function formatClock(clock: string | null): string {
 export function formatUtc(utc: string | null): string {
   const m = utc ? /T(\d{2}:\d{2}:\d{2})/.exec(utc) : null
   return m ? m[1] : ''
+}
+
+/** 0.523 -> "52%", tiny but non-zero -> "<1%", near-certain -> ">99%" */
+export function formatPct(p: number): string {
+  if (p >= 0.995) return '>99%'
+  if (p > 0 && p < 0.005) return '<1%'
+  return `${Math.round(p * 100)}%`
 }

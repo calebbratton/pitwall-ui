@@ -67,7 +67,7 @@ export function PredictionPanel({ sets, drivers, totalLaps, trackStatus, follow,
               title={s.source === 'ask' ? 'From a question to strategy' : `Pushed at the ${STATUS_LABEL[s.prediction.status]}`}
               onClick={() => setPicked(s.id)}
             >
-              L{s.prediction.lap ?? '?'}
+              {s.prediction.lap === 0 ? 'Grid' : `L${s.prediction.lap ?? '?'}`}
               {s.source === 'ask' && <span className="pred__q">?</span>}
               {repeat(sets, i) > 1 && <span className="pred__n">{repeat(sets, i)}</span>}
             </button>
@@ -79,8 +79,16 @@ export function PredictionPanel({ sets, drivers, totalLaps, trackStatus, follow,
           <h2 className="calls__title">Who wins from here?</h2>
           <p className="calls__meta">
             <span>
-              LAP <b>{p.lap ?? '?'}</b>
-              {total ? `/${total}` : ''} ·{' '}
+              {p.lap === 0 ? (
+                <>
+                  PRE-RACE · <b>{total ?? '?'}</b> laps ·{' '}
+                </>
+              ) : (
+                <>
+                  LAP <b>{p.lap ?? '?'}</b>
+                  {total ? `/${total}` : ''} ·{' '}
+                </>
+              )}
               <span className={`pred__status pred__status--${p.status.toLowerCase()}`}>{STATUS_LABEL[p.status]}</span>
               {p.sims !== null && <> · {p.sims.toLocaleString('en-US')} sims</>}
             </span>

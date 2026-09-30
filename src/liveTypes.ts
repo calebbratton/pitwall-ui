@@ -40,6 +40,10 @@ export interface TimingRow {
   pit_stops: number
   in_pit: boolean
   retired: boolean
+  /** best lap (s): practice / qualifying (current segment) */
+  best_lap?: number | null
+  /** qualifying: out of the session */
+  knocked_out?: boolean
 }
 
 export type RejoinKind = 'green' | 'sc' | 'vsc'
@@ -65,6 +69,8 @@ export interface Snapshot {
   status: TrackStatus
   clock: string | null
   drivers: TimingRow[]
+  /** SessionInfo Type: 'Race' (incl. sprints) | 'Qualifying' | 'Practice'; '' when unknown */
+  session_type?: string
   /** typical current green lap (s), for drawing the field on one line by gap */
   lap_time_s?: number | null
   pit_loss?: Record<RejoinKind, number> | null

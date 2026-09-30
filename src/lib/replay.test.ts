@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ReplayEvent, ReplayParams, ReplayState } from '../liveTypes'
+import type { ReplayEvent, ReplayParams, ReplayState, TimingRow } from '../liveTypes'
 import {
   applySectorFlag,
   feedFinished,
@@ -8,6 +8,7 @@ import {
   formatInterval,
   initialReplayState,
   isNoise,
+  isTimedSession,
   parseReplayEvent,
   replayReducer,
 } from './replay'
@@ -346,5 +347,28 @@ describe('weather events', () => {
     state = replayReducer(state, { type: 'event', event: f as ReplayEvent })
     expect(state.weather?.track_c).toBe(47.3)
     expect(state.forecast?.location).toBe('Kuala Lumpur')
+  })
+})
+
+describe('practice and qualifying snapshots', () => {
+  it('parses best laps, knock-outs and the session type', () => {
+    const e = parseReplayEvent(
+      'snapshot',
+      JSON.stringify({
+        lap: null,
+        total_laps: null,
+        status: 'GREEN',
+        clock: null,
+        session_type: 'Qualifying',
+        drivers: [{ position: 12, tla: 'ALO', number: '14', gap: 0.9, best_lap: 103.7, knocked_out: true }],
+      }),
+    )
+    expect(e).toMatchObject({ type: 'snapshot', session_type: 'Qualifying' })
+    const d = (e as { drivers: TimingRow[] }).drivers[0]
+    expect(d.best_lap).toBe(103.7)
+    expect(d.knocked_out).toBe(true)
+    expect(isTimedSession(e as { session_type?: string })).toBe(true)
+    expect(isTimedSession({ session_type: 'Race' })).toBe(false)
+    expect(isTimedSession({ session_type: '' })).toBe(false)
   })
 })

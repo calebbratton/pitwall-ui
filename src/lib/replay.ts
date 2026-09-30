@@ -50,8 +50,14 @@ function row(d: Rec): TimingRow {
     pit_stops: num(d.pit_stops) ?? 0,
     in_pit: d.in_pit === true,
     retired: d.retired === true,
+    best_lap: num(d.best_lap),
+    knocked_out: d.knocked_out === true,
   }
 }
+
+/** Practice and qualifying are timed by best lap (no race gaps, laps or strategy calls). */
+export const isTimedSession = (s: { session_type?: string } | null | undefined) =>
+  !!s?.session_type && s.session_type !== 'Race'
 
 const REJOIN_KINDS: readonly RejoinKind[] = ['green', 'sc', 'vsc']
 
@@ -196,6 +202,7 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
         status: trackStatus(d.status),
         clock: typeof d.clock === 'string' ? d.clock : null,
         drivers: Array.isArray(d.drivers) ? d.drivers.filter(isRecord).map(row) : [],
+        session_type: str(d.session_type),
         lap_time_s: num(d.lap_time_s),
         pit_loss: pitLoss(d.pit_loss),
         rejoin: rejoinTable(d.rejoin),

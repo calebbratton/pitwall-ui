@@ -1,5 +1,6 @@
 import type { RadioItem, Snapshot, TimingRow, TrackStatus } from '../liveTypes'
-import { formatClock, formatGap, formatInterval, STATUS_LABEL } from '../lib/replay'
+import { formatClock, formatGap, formatInterval, isTimedSession, STATUS_LABEL } from '../lib/replay'
+import { fmtLap } from '../lib/runTimeline'
 import { CompoundPill } from './CompoundPill'
 
 interface Props {
@@ -14,8 +15,19 @@ interface Props {
   emptyText?: string
 }
 
-function Row({ d, followed, onFollow }: { d: TimingRow; followed: boolean; onFollow: Props['onFollow'] }) {
-  const cls = ['tt__row', d.retired && 'is-out', d.in_pit && !d.retired && 'is-pit', followed && 'is-followed'].filter(Boolean).join(' ')
+function Row({
+  d,
+  followed,
+  onFollow,
+  timed,
+}: {
+  d: TimingRow
+  followed: boolean
+  onFollow: Props['onFollow']
+  timed: boolean
+}) {
+  const out = d.retired || d.knocked_out
+  const cls = ['tt__row', out && 'is-out', d.in_pit && !out && 'is-pit', followed && 'is-followed'].filter(Boolean).join(' ')
   return (
     <tr className={cls}>
       <td className="tt__pos">{d.retired ? '—' : (d.position ?? '')}</td>
@@ -36,15 +48,16 @@ function Row({ d, followed, onFollow }: { d: TimingRow; followed: boolean; onFol
         </button>
         <span className="tt__team">{d.team}</span>
       </td>
-      <td className={`tt__gap${d.position === 1 && !d.retired ? ' is-leader' : ''}`}>{formatGap(d)}</td>
+      <td className={`tt__gap${d.position === 1 && !d.retired ? ' is-leader' : ''}`}>{timed && d.position === 1 && !out ? 'FASTEST' : formatGap(d)}</td>
       <td className="tt__int">{formatInterval(d)}</td>
       <td className="tt__tyre">
         {d.compound ? <CompoundPill compound={d.compound} text={d.tyre_age === null ? '—' : String(d.tyre_age)} /> : '—'}
       </td>
-      <td className="tt__pits">{d.pit_stops}</td>
+      <td className="tt__pits">{timed ? fmtLap(d.best_lap ?? null) || '—' : d.pit_stops}</td>
       <td className="tt__flag">
-        {d.in_pit && !d.retired && <span className="badge badge--pit">PIT</span>}
+        {d.in_pit && !out && <span className="badge badge--pit">PIT</span>}
         {d.retired && <span className="badge badge--out">OUT</span>}
+        {d.knocked_out && !d.retired && <span className="badge badge--out">KO</span>}
       </td>
     </tr>
   )
@@ -52,13 +65,18 @@ function Row({ d, followed, onFollow }: { d: TimingRow; followed: boolean; onFol
 
 export function TimingTower({ snapshot, trackStatus, follow, onFollow, latestTranscript, loading, emptyText }: Props) {
   const status = trackStatus ?? snapshot?.status ?? null
+  const timed = isTimedSession(snapshot)
   return (
     <section className="tt" aria-label="Timing tower">
       <header className="tt__head">
-        <span className="tt__lap">
-          LAP <b>{snapshot?.lap ?? '–'}</b>
-          <span className="tt__total">/{snapshot?.total_laps ?? '–'}</span>
-        </span>
+        {timed ? (
+          <span className="tt__lap">{snapshot?.session_type === 'Qualifying' ? 'QUALIFYING' : 'PRACTICE'}</span>
+        ) : (
+          <span className="tt__lap">
+            LAP <b>{snapshot?.lap ?? '–'}</b>
+            <span className="tt__total">/{snapshot?.total_laps ?? '–'}</span>
+          </span>
+        )}
         {status && <span className={`ts-chip ts-chip--${status.toLowerCase()}`}>{STATUS_LABEL[status]}</span>}
         {snapshot?.clock && <span className="tt__clock">{formatClock(snapshot.clock)}</span>}
       </header>
@@ -80,8 +98,8 @@ export function TimingTower({ snapshot, trackStatus, follow, onFollow, latestTra
                 <th scope="col">Gap</th>
                 <th scope="col">Int</th>
                 <th scope="col">Tyre</th>
-                <th scope="col" title="Pit stops">
-                  Stops
+                <th scope="col" title={timed ? 'Best lap' : 'Pit stops'}>
+                  {timed ? 'Best' : 'Stops'}
                 </th>
                 <th scope="col">
                   <span className="sr-only">Status</span>
@@ -90,7 +108,7 @@ export function TimingTower({ snapshot, trackStatus, follow, onFollow, latestTra
             </thead>
             <tbody>
               {snapshot.drivers.map((d) => (
-                <Row key={d.tla} d={d} followed={d.tla === follow} onFollow={onFollow} />
+                <Row key={d.tla} d={d} followed={d.tla === follow} onFollow={onFollow} timed={timed} />
               ))}
             </tbody>
           </table>

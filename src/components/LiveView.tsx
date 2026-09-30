@@ -23,7 +23,7 @@ import {
 } from '../lib/layout'
 import { liveTarget } from '../lib/liveApi'
 import { shouldAutoQueue } from '../lib/radioQueue'
-import { feedFinished } from '../lib/replay'
+import { feedFinished, isTimedSession } from '../lib/replay'
 import { LiveChat } from './LiveChat'
 import { PitCallsPanel } from './PitCallsPanel'
 import { PredictionPanel } from './PredictionPanel'
@@ -390,7 +390,7 @@ export function LiveView({ useMock, hidden }: Props) {
         predictionLap={latestPrediction?.prediction.lap ?? null}
       />
       <WeatherBar weather={state.weather} forecast={state.forecast} />
-      {!layout.lineHidden && (
+      {!layout.lineHidden && !isTimedSession(snapshot) && (
         <TrackLine snapshot={snapshot} trackStatus={state.trackStatus} follow={follow} onFollow={setFollow} />
       )}
       {idle && (

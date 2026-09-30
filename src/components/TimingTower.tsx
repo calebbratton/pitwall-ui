@@ -10,6 +10,8 @@ interface Props {
   /** most recent clip with a transcript, shown in a strip under the header */
   latestTranscript: RadioItem | null
   loading: boolean
+  /** shown instead of the default when there is no timing yet */
+  emptyText?: string
 }
 
 function Row({ d, followed, onFollow }: { d: TimingRow; followed: boolean; onFollow: Props['onFollow'] }) {
@@ -48,7 +50,7 @@ function Row({ d, followed, onFollow }: { d: TimingRow; followed: boolean; onFol
   )
 }
 
-export function TimingTower({ snapshot, trackStatus, follow, onFollow, latestTranscript, loading }: Props) {
+export function TimingTower({ snapshot, trackStatus, follow, onFollow, latestTranscript, loading, emptyText }: Props) {
   const status = trackStatus ?? snapshot?.status ?? null
   return (
     <section className="tt" aria-label="Timing tower">
@@ -96,7 +98,7 @@ export function TimingTower({ snapshot, trackStatus, follow, onFollow, latestTra
           <p className="tt__empty">
             {loading
               ? 'Loading the archive… the first replay of a race downloads it (a few seconds).'
-              : 'Timing appears here once a live session starts.'}
+              : (emptyText ?? 'Timing appears here once a live session starts.')}
           </p>
         )}
       </div>

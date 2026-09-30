@@ -28,6 +28,10 @@ export function updateMockLive(id: string, patch: Partial<MockLive>): void {
   if (s) sessions.set(id, { ...s, ...patch })
 }
 
+export function mockLiveState(id: string): Readonly<MockLive> | undefined {
+  return sessions.get(id)
+}
+
 /** The server forgets a live session (stopped / restarted) -> asks get 404. */
 export function dropMockLive(id: string): void {
   sessions.delete(id)

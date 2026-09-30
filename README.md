@@ -31,13 +31,23 @@ The mock encodes real SSE bytes and streams them through the same parser as the 
 
 ## LIVE view
 
-The **Strategy chat | Live** switch in the top bar opens the LIVE view, built for following a race live. Between race
-weekends it is driven by a **test replay**: the backend replays an archived race as if it were live. The test replay
-controls are a compact dev affordance in the session bar (**▶ Test replay** plays the latest race at the chosen
-speed; **Options** opens season, race, speed 1x–120x and start lap), and a **TEST REPLAY** badge marks a session
-fed by the archive (`source: "replay"`). The UI shows a timing tower, the track status banner (`LIVE · LAP 31/51`),
-race control and team radio (with machine transcripts), and, whenever a safety car or VSC starts, the **pit wall
-calls** (PIT / STAY OUT per car with reasons). Every call set stays available as a tab (`SC · L31`, `SC · L36`, …).
+The **Strategy chat | Live** switch in the top bar opens the LIVE view, which follows the **real live session**.
+On opening (and every 30 s while the tab is on screen) it asks `GET /api/live/current`; if a live session exists it
+subscribes to `GET /api/live/stream?live_id=…` and shows it as the main view (`LIVE · <meeting> · <session>`, a green
+dot while connected, *RECONNECTING* while EventSource reconnects). A new `live_id` on the server (e.g. the next
+session, or a backend restart) is picked up by the poll and followed automatically. A reconnect replays the server's
+catch-up; the reducer de-duplicates race control / radio / pit calls / predictions so lists don't double up. Between
+sessions the feed shows the last session's final state, flagged with a subtle *Feed idle* note (lap = total laps,
+stream ended, or no event for 2 min). With no live session (`/current` 404) the bar says *No live session* and offers
+**Start following live feed** (`POST /api/live/start`, a local dev tool).
+
+Between race weekends the view can also be driven by a **test replay**: the backend replays an archived race as if
+it were live. The test replay controls are a compact, secondary group in the session bar (**▶ Test replay** plays
+the latest race at the chosen speed; **Options** opens season, race, speed 1x–120x and start lap), a **TEST
+REPLAY** badge marks it, and **Back to live** returns to the live session. The UI shows a timing tower, the track
+status banner (`LIVE · LAP 31/51`), race control and team radio (with machine transcripts), and, whenever a safety
+car or VSC starts, the **pit wall calls** (PIT / STAY OUT per car with reasons). Every call set stays available as a
+tab (`SC · L31`, `SC · L36`, …).
 
 **Who wins from here?** Each SC/VSC deployment also pushes a prediction: simulated finishes from the current order,
 with per-car win % (bar), podium %, expected finish, compound pill + age + Pirelli C-number (`C4`), stopped / to-stop
@@ -48,7 +58,8 @@ stint here"). Predictions from chat answers join the same history as tabs (`L31`
 end on these mediums?", "Should NOR pit under this SC?"). Each answer is stamped with the lap and status it was worked
 out on (`L31 · SAFETY CAR`, "3 laps ago" once the race moves on) and links its top-3 win chances to the prediction
 panel. One question at a time; 404 (session gone) / 409 (too early) / network errors show inline. The history
-belongs to the live session (`live_id`): a reconnect to the same session keeps it, a new session clears it. On
+belongs to the live session (`live_id`): a reconnect to the same session keeps it (as does going to a test replay
+and back), a new session starts empty. On
 desktop the channel is a tab next to the race control / radio feeds; on phones it's a bottom sheet opened with the
 **Ask strategy** button.
 
@@ -64,7 +75,7 @@ need your own F1 TV login and is for local, personal use only.
 
 Try `2026 → Azerbaijan GP`, speed 60x, from lap 29: two safety cars (laps 31 and 36) in about two minutes.
 The first replay of a race downloads the archive, so it takes a few seconds to start. In mock mode the view plays
-a short scripted safety-car sequence (with a `live` event and a prediction at the SC) instead, and the mock
+a short scripted safety-car sequence as the "live session" (mock `/current` + stream) and as the test replay (with a `live` event and a prediction at the SC) instead, and the mock
 `/api/live/ask` answers from that scripted race state: keyword-picked answers for "who wins", "make it to the end /
 tyres" and "pit / box", 409 before the first timing snapshot, 404 after Stop, `/offline` in a message simulates no
 network.
@@ -77,7 +88,8 @@ npm run lint    # eslint (typescript-eslint strict + react-hooks)
 npm test        # vitest: SSE parser, answer formatting, pipeline state, mock transport,
                 #         replay reducer (incl. live id + prediction history), race-control noise filter,
                 #         radio queue, mock replay + mock ask, track map store, projection and interpolation,
-                #         ask client (success/404/409/network), live chat state
+                #         ask client (success/404/409/network), live chat state, /current + polling,
+                #         live vs test replay switching, catch-up de-duplication
 ```
 
 ## Backend contract
@@ -93,6 +105,10 @@ npm test        # vitest: SSE parser, answer formatting, pipeline state, mock tr
   `track_status`, `race_control`, `radio`, `radio_transcript`, `pit_calls`, `prediction`
   (`{lap, laps_remaining, status, sims, table: [{tla, position, expected, p_win, p_podium, compound, compound_c,
   tyre_age, stopped, tyre_risk, tyre_note}], notes}`, rows in running order), `end`, `error`.
+- `GET /api/live/current` → `{live_id, source, connected, recording, meeting, session, lap, total_laps, status}`
+  or 404 `{detail}` when there is no live session; `POST /api/live/start` starts following the live feed (same answer).
+- `GET /api/live/stream?live_id=…` → the same events as the replay stream: `live`, a catch-up of the current state,
+  then live events; `end` when the session stops; 404 for an unknown `live_id`. EventSource may reconnect here.
 - `POST /api/live/ask` with `{"live_id": string, "message": string}` → JSON
   `{answer (markdown), lap, status, prediction, steps}`; 404 `{detail}` when the live session is gone, 409 `{detail}`
   when there isn't enough race data yet. See `src/lib/liveAsk.ts`.
@@ -122,7 +138,8 @@ src/
   hooks/useFollow.ts       followed driver, persisted per race
   lib/replay.ts            replay event parser, reducer, race-control noise filter, timing formatters
   lib/radioQueue.ts        radio queue reducer, auto-queue rule, follow persistence
-  lib/liveApi.ts           /api/live/sessions + EventSource replay transport
+  lib/liveApi.ts           /api/live/sessions, /current + polling, /start, replay + live stream transports
+  hooks/useLiveCurrent.ts  /api/live/current poll while the LIVE tab is visible
   lib/trackMap.ts          map store (track + positions), rotation/projection, sector segments, lerp/snap
   lib/mockReplay.ts        scripted mock races and replay (incl. a mock circuit and moving cars)
   lib/liveAsk.ts           POST /api/live/ask client (404/409/network -> typed failures)

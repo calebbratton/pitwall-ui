@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ReplayEvent, ReplayParams, ReplayState } from '../liveTypes'
 import {
   applySectorFlag,
+  feedFinished,
   filterRaceControl,
   formatGap,
   formatInterval,
@@ -269,5 +270,60 @@ describe('live session + predictions', () => {
     expect(replayReducer(ended, { type: 'prediction', liveId: 'L1', prediction: asked }).predictions).toHaveLength(4)
     // a new run starts with an empty history
     expect(replayReducer(s, { type: 'start', params }).predictions).toEqual([])
+  })
+})
+
+describe('live stream catch-up and reconnects', () => {
+  const liveParams = { kind: 'live' as const, liveId: 'L1', meeting: 'Azerbaijan Grand Prix · Race' }
+  const catchUp: [string, Record<string, unknown>][] = [
+    ['live', { live_id: 'L1', source: 'live' }],
+    ['session', { meeting: 'Azerbaijan Grand Prix', session: 'Race', total_laps: 51 }],
+    ['snapshot', { lap: 31, total_laps: 51, status: 'SAFETY_CAR', drivers: [driver({})] }],
+    ['race_control', { lap: 31, category: 'SafetyCar', message: 'SAFETY CAR DEPLOYED' }],
+    ['race_control', { lap: 31, category: 'Other', message: 'PIT EXIT OPEN' }],
+    ['radio', { driver: '4', tla: 'NOR', utc: null, url: 'u1', text: 'Box box.' }],
+    ['pit_calls', report('SAFETY_CAR', 31)],
+    ['prediction', prediction(31)],
+  ]
+
+  it('a reconnect replaying the catch-up does not duplicate feed items', () => {
+    const first = run(catchUp, replayReducer(initialReplayState, { type: 'start', params: liveParams }))
+    expect(first.params).toEqual(liveParams)
+    const dropped = replayReducer(first, { type: 'event', event: { type: 'connection', connected: false } })
+    expect(dropped.connected).toBe(false)
+    expect(dropped.phase).toBe('running') // reconnecting is not an error
+    const again = run(catchUp, dropped)
+    expect(again.connected).toBe(true)
+    expect(again.raceControl).toHaveLength(2)
+    expect(again.radio).toHaveLength(1)
+    expect(again.pitCalls).toHaveLength(1)
+    expect(again.predictions).toHaveLength(1)
+    // new items after the catch-up still land
+    const more = run(
+      [
+        ['race_control', { lap: 32, category: 'SafetyCar', message: 'SAFETY CAR IN THIS LAP' }],
+        ['prediction', prediction(36, 'VSC')],
+      ],
+      again,
+    )
+    expect(more.raceControl).toHaveLength(3)
+    expect(more.predictions).toHaveLength(2)
+  })
+
+  it('an asked prediction on the same lap is not mistaken for a duplicate', () => {
+    const s = run(catchUp, replayReducer(initialReplayState, { type: 'start', params: liveParams }))
+    const parsed = parseReplayEvent('prediction', JSON.stringify(prediction(31)))
+    if (parsed?.type !== 'prediction') throw new Error('parse')
+    const { type: _t, ...p } = parsed
+    void _t
+    expect(replayReducer(s, { type: 'prediction', liveId: 'L1', prediction: p }).predictions).toHaveLength(2)
+  })
+
+  it('reset clears the screen; feedFinished spots a finished session', () => {
+    const s = run(catchUp)
+    expect(replayReducer(s, { type: 'reset' })).toEqual(initialReplayState)
+    expect(feedFinished(s)).toBe(false)
+    expect(feedFinished(run([['snapshot', { lap: 51, total_laps: 51, status: 'GREEN', drivers: [] }]]))).toBe(true)
+    expect(feedFinished(run([['end', {}]]))).toBe(true)
   })
 })

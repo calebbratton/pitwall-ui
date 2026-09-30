@@ -8,8 +8,8 @@ import type {
   PredictionRow,
   RaceControlItem,
   ReplayEvent,
-  ReplayParams,
   ReplayState,
+  StreamParams,
   Snapshot,
   TimingRow,
   TrackMarker,
@@ -231,6 +231,7 @@ export const PREDICTION_CAP = 30
 export const initialReplayState: ReplayState = {
   phase: 'idle',
   params: null,
+  connected: null,
   error: null,
   session: null,
   snapshot: null,
@@ -247,11 +248,16 @@ export const initialReplayState: ReplayState = {
 }
 
 export type ReplayAction =
-  | { type: 'start'; params: ReplayParams }
+  | { type: 'start'; params: StreamParams }
+  /** back to nothing on screen (e.g. leaving a test replay when no live session exists) */
+  | { type: 'reset' }
   | { type: 'event'; event: ReplayEvent }
   | { type: 'stop' }
   /** a prediction that came back with a chat answer; ignored unless it belongs to the current live session */
   | { type: 'prediction'; liveId: string; prediction: Prediction }
+
+/** Identity of a pushed prediction: one per neutralisation (status + lap). */
+export const predictionKey = (p: Prediction) => `${p.status}|${p.lap}|${p.laps_remaining}`
 
 function addPrediction(state: ReplayState, source: PredictionSet['source'], prediction: Prediction): ReplayState {
   const seq = state.seq + 1
@@ -270,6 +276,8 @@ export function replayReducer(state: ReplayState, action: ReplayAction): ReplayS
   switch (action.type) {
     case 'start':
       return { ...initialReplayState, phase: 'connecting', params: action.params }
+    case 'reset':
+      return initialReplayState
     case 'prediction':
       return state.liveId !== null && action.liveId === state.liveId
         ? addPrediction(state, 'ask', action.prediction)
@@ -287,11 +295,17 @@ export function replayReducer(state: ReplayState, action: ReplayAction): ReplayS
 function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
   const seq = state.seq + 1
   switch (e.type) {
+    case 'connection':
+      return state.connected === e.connected ? state : { ...state, connected: e.connected }
     case 'live':
-      return { ...state, liveId: e.live_id, liveSource: e.source }
+      return { ...state, liveId: e.live_id, liveSource: e.source, connected: true }
     case 'prediction': {
       const { type: _type, ...prediction } = e
       void _type
+      // a reconnect replays the catch-up: skip a prediction we already have
+      if (state.predictions.some((p) => p.source === 'event' && predictionKey(p.prediction) === predictionKey(prediction))) {
+        return state
+      }
       return addPrediction(state, 'event', prediction)
     }
     case 'session':
@@ -304,6 +318,9 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
     case 'track_status':
       return { ...state, trackStatus: e.status }
     case 'race_control': {
+      if (state.raceControl.some((r) => r.lap === e.lap && r.category === e.category && r.message === e.message)) {
+        return state
+      }
       const item: RaceControlItem = { id: seq, lap: e.lap, category: e.category, message: e.message }
       return {
         ...state,
@@ -333,6 +350,9 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
       }
     }
     case 'pit_calls':
+      if (state.pitCalls.some((p) => p.report.track_status === e.report.track_status && p.report.lap === e.report.lap)) {
+        return state
+      }
       return {
         ...state,
         seq,
@@ -347,6 +367,12 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
     case 'positions':
       return state
   }
+}
+
+/** The live feed is between sessions: the snapshot shows a finished race or the stream ended. */
+export function feedFinished(state: ReplayState): boolean {
+  const s = state.snapshot
+  return state.phase === 'ended' || (!!s && s.lap !== null && s.total_laps !== null && s.lap >= s.total_laps)
 }
 
 // ---------- marshal sector yellows ----------

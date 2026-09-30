@@ -60,3 +60,15 @@ describe('live chat state', () => {
     expect(s.liveId).toBe('L1')
   })
 })
+
+describe('chat history per live session', () => {
+  it('coming back to a live session restores its history', () => {
+    const live = reduce([send('LIVE'), { type: 'answer', liveId: 'LIVE', data: answer, at: 2 }])
+    const replay = reduce([send('REPLAY', 'Should NOR pit?')], live)
+    expect(replay.messages.map((m) => m.text)).toEqual(['Should NOR pit?'])
+    expect(chatFor(replay, 'LIVE').messages.map((m) => m.role)).toEqual(['user', 'agent'])
+    const back = reduce([{ type: 'session', liveId: 'LIVE' }], replay)
+    expect(back.messages.map((m) => m.text)).toEqual(['Who wins from here?', 'RUS wins.'])
+    expect(back.archive.REPLAY).toHaveLength(1)
+  })
+})

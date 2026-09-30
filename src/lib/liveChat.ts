@@ -1,6 +1,7 @@
 /**
- * Strategy chat about the live session: history, one question at a time. The history belongs to one
- * live_id: a reconnect to the same live session keeps it, a new live_id clears it.
+ * Strategy chat about the live session: history, one question at a time. Histories are kept per
+ * live_id: a reconnect (or coming back from a test replay) to the same live session shows its history
+ * again, a new live_id starts empty.
  */
 import type { Prediction, TrackStatus } from '../liveTypes'
 import type { AskAnswer, AskFailure } from './liveAsk'
@@ -27,9 +28,14 @@ export interface LiveChatState {
   messages: LiveChatMessage[]
   pending: boolean
   seq: number
+  /** histories of other live sessions seen in this tab, by live_id */
+  archive: Record<string, LiveChatMessage[]>
 }
 
-export const initialLiveChat: LiveChatState = { liveId: null, messages: [], pending: false, seq: 0 }
+export const initialLiveChat: LiveChatState = { liveId: null, messages: [], pending: false, seq: 0, archive: {} }
+
+/** How many other sessions' histories to keep. */
+export const ARCHIVE_CAP = 5
 
 export type LiveChatAction =
   /** the live session on screen; a different non-null id clears the history */
@@ -41,7 +47,12 @@ export type LiveChatAction =
 
 function forSession(state: LiveChatState, liveId: string | null): LiveChatState {
   if (liveId === null || liveId === state.liveId) return state
-  return { ...initialLiveChat, liveId, seq: state.seq }
+  const saved =
+    state.liveId !== null && state.messages.length ? { ...state.archive, [state.liveId]: state.messages } : state.archive
+  const messages = saved[liveId] ?? []
+  const others = Object.entries(saved).filter(([k]) => k !== liveId)
+  const archive = Object.fromEntries(others.slice(-ARCHIVE_CAP))
+  return { liveId, messages, pending: false, seq: state.seq, archive }
 }
 
 function push(state: LiveChatState, m: Omit<LiveChatMessage, 'id'>, pending: boolean): LiveChatState {
@@ -88,7 +99,7 @@ export function liveChatReducer(state: LiveChatState, action: LiveChatAction): L
 /** The history to show for `liveId`: nothing from another live session. */
 export function chatFor(state: LiveChatState, liveId: string | null): LiveChatState {
   if (liveId === null || state.liveId === null || state.liveId === liveId) return state
-  return { ...initialLiveChat, liveId }
+  return forSession(state, liveId)
 }
 
 export const SUGGESTIONS = [

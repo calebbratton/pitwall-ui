@@ -6,9 +6,10 @@
  * calls and a "who wins from here" prediction arrive, most of the field pits, the safety car comes in
  * and racing resumes, then `end`. The first frame is `live` (the live session id the chat asks about).
  */
-import type { LiveSessionInfo, ReplayEvent, ReplayParams, ReplayTransport } from '../liveTypes'
+import type { LiveCurrent, LiveSessionInfo, LiveSource, LiveTransport, ReplayEvent, ReplayParams, ReplayTransport } from '../liveTypes'
+import type { CurrentFetcher } from './liveApi'
 import type { Compound } from './format'
-import { dropMockLive, mockPrediction, registerMockLive, updateMockLive } from './mockAsk'
+import { dropMockLive, mockLiveState, mockPrediction, registerMockLive, updateMockLive } from './mockAsk'
 import { parseReplayEvent } from './replay'
 
 const MOCK_SESSIONS: Record<number, [string, string][]> = {
@@ -149,7 +150,7 @@ export interface MockFrame {
 const RADIO_BASE = 'https://livetiming.formula1.com/static/2026/2026-09-26_Azerbaijan_Grand_Prix/2026-09-26_Race/TeamRadio/'
 
 /** The mock replay as a list of frames (exported for tests). */
-export function mockReplayScript(meeting: string, totalLaps = 51, liveId = 'mock-live'): MockFrame[] {
+export function mockReplayScript(meeting: string, totalLaps = 51, liveId = 'mock-live', source: LiveSource = 'replay'): MockFrame[] {
   const state = new Map<string, CarState>(
     GRID.map((c) => [
       c.tla,
@@ -181,7 +182,7 @@ export function mockReplayScript(meeting: string, totalLaps = 51, liveId = 'mock
     }
   }
 
-  push(0, 'live', { live_id: liveId, source: 'replay' })
+  push(0, 'live', { live_id: liveId, source })
   push(400, 'session', { meeting, session: 'Race', total_laps: totalLaps })
   push(50, 'track', mockTrack())
   snap(29, 'GREEN')
@@ -334,19 +335,15 @@ export function mockPositions(elapsedMs: number, lapMs: number) {
   return { utc: new Date(Date.UTC(2026, 8, 26, 12) + elapsedMs).toISOString(), cars }
 }
 
-/** Replays the scripted frames on timers. Delays scale with the chosen speed (30x = as written). */
-export const openMockReplay: ReplayTransport = (params: ReplayParams, onEvent) => {
-  const scale = Math.min(3, Math.max(0.2, 30 / params.speed))
-  const liveId = newLiveId()
-  registerMockLive(liveId, 'replay')
-  const frames = mockReplayScript(meetingFromPath(params.path) || params.meeting, 51, liveId)
+/** Plays scripted frames on timers, keeping the mock server's race state in step (for the mock ask). */
+function playMock(frames: MockFrame[], liveId: string, speed: number, onEvent: (e: ReplayEvent) => void, dropOnStop: boolean) {
+  const scale = Math.min(3, Math.max(0.2, 30 / speed))
   let i = 0
   let timer: ReturnType<typeof setTimeout> | undefined
   let ticker: ReturnType<typeof setInterval> | undefined
   const emit = (name: string, data: unknown) => {
     const event = parseReplayEvent(name, JSON.stringify(data))
     if (!event) return
-    // keep the mock server's race state in step, like the backend does for /api/live/ask
     if (event.type === 'snapshot') {
       const { type: _type, ...snapshot } = event
       void _type
@@ -356,7 +353,7 @@ export const openMockReplay: ReplayTransport = (params: ReplayParams, onEvent) =
   }
   const startPositions = () => {
     const t0 = Date.now()
-    const lapMs = (LAP_TIME * 1000) / params.speed
+    const lapMs = (LAP_TIME * 1000) / speed
     ticker = setInterval(() => emit('positions', { type: 'positions', ...mockPositions(Date.now() - t0, lapMs) }), 250)
   }
   const next = () => {
@@ -371,12 +368,64 @@ export const openMockReplay: ReplayTransport = (params: ReplayParams, onEvent) =
   }
   next()
   return () => {
-    // Stop ends the live session on the (mock) server; after a normal `end` it stays askable.
-    if (i < frames.length) dropMockLive(liveId)
+    // Stopping a replay ends its live session on the (mock) server; after a normal `end` it stays askable.
+    if (dropOnStop && i < frames.length) dropMockLive(liveId)
     i = frames.length
     clearTimeout(timer)
     clearInterval(ticker)
   }
+}
+
+/** Replays the scripted frames on timers. Delays scale with the chosen speed (30x = as written). */
+export const openMockReplay: ReplayTransport = (params: ReplayParams, onEvent) => {
+  const liveId = newLiveId()
+  registerMockLive(liveId, 'replay')
+  const frames = mockReplayScript(meetingFromPath(params.path) || params.meeting, 51, liveId)
+  return playMock(frames, liveId, params.speed, onEvent, true)
+}
+
+// ---------- mock live feed (GET /api/live/current, /api/live/stream, POST /api/live/start) ----------
+
+export const MOCK_LIVE_ID = 'mock-live-feed'
+const MOCK_LIVE_MEETING = 'Azerbaijan Grand Prix'
+
+let mockFeedOn = true
+
+/** Tests / demo: switch the mock server's live feed off (then /current is 404 until "start"). */
+export function setMockFeed(on: boolean): void {
+  mockFeedOn = on
+}
+
+function mockCurrentBody(): LiveCurrent {
+  const s = mockLiveState(MOCK_LIVE_ID)
+  return {
+    live_id: MOCK_LIVE_ID,
+    source: 'live',
+    connected: true,
+    recording: null,
+    meeting: MOCK_LIVE_MEETING,
+    session: 'Race',
+    lap: s?.snapshot?.lap ?? null,
+    total_laps: s?.snapshot?.total_laps ?? 51,
+    status: s?.status ?? 'UNKNOWN',
+  }
+}
+
+export const fetchMockCurrent: CurrentFetcher = async () => {
+  await new Promise((r) => setTimeout(r, 120))
+  return mockFeedOn ? { kind: 'live', current: mockCurrentBody() } : { kind: 'none', detail: 'No live session (mock).' }
+}
+
+export const startMockFeed: CurrentFetcher = async () => {
+  mockFeedOn = true
+  return fetchMockCurrent()
+}
+
+/** The mock live stream: the scripted race at 30x, reported as a live session. */
+export const openMockLive: LiveTransport = (params, onEvent) => {
+  if (!mockLiveState(params.liveId)) registerMockLive(params.liveId, 'live')
+  const frames = mockReplayScript(MOCK_LIVE_MEETING, 51, params.liveId, 'live')
+  return playMock(frames, params.liveId, 30, onEvent, false)
 }
 
 function newLiveId(): string {

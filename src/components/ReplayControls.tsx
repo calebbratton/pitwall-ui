@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { LiveSessionInfo, ReplayPhase } from '../liveTypes'
+import { useState, type ReactNode } from 'react'
+import type { LiveSessionInfo } from '../liveTypes'
 import type { Sessions } from '../hooks/useSessions'
 
 // Pit Wall covers the current season and the one before (rolling; matches the backend's
@@ -19,22 +19,14 @@ interface Props {
   fromLap: string
   onFromLap: (v: string) => void
   maxLap: number | null
-  phase: ReplayPhase
+  /** a test replay is loading or playing (Play turns into Stop) */
+  replayActive: boolean
   onPlay: () => void
   onStop: () => void
-  /** "Azerbaijan Grand Prix — Race" once known */
-  title: string | null
-  /** the live session is fed by an archived race (testing), not the real live timing feed */
-  testReplay: boolean
-}
-
-const PHASE_TEXT: Record<ReplayPhase, string> = {
-  idle: 'NO SESSION',
-  connecting: 'CONNECTING',
-  running: 'LIVE',
-  ended: 'FINISHED',
-  stopped: 'STOPPED',
-  error: 'ERROR',
+  /** left side: what's on screen (live session / test replay) and its state */
+  now: ReactNode
+  /** extra actions before the test replay group (Back to live, Start following live feed) */
+  actions?: ReactNode
 }
 
 function raceLabel(s: LiveSessionInfo) {
@@ -42,26 +34,20 @@ function raceLabel(s: LiveSessionInfo) {
 }
 
 /**
- * Live session bar: what's on screen and its state. Test replays (an archived race played as if live)
+ * Session bar: what's on screen and its state (from the caller), live actions, and the test replay group.
+ * Test replays (an archived race played as if live)
  * are a dev/testing affordance between race weekends, so their options sit in a collapsed group.
  */
 export function ReplayControls(p: Props) {
   const [open, setOpen] = useState(false)
-  const active = p.phase === 'connecting' || p.phase === 'running'
+  const active = p.replayActive
   const { sessions, loading, error } = p.sessions
   const selected = sessions.find((s) => s.path === p.path)
   return (
     <div className={`rc-bar${open ? ' is-open' : ''}`}>
-      <div className="rc-bar__now">
-        <span className={`tag tag--phase-${p.phase}`}>{PHASE_TEXT[p.phase]}</span>
-        {p.testReplay && (
-          <span className="replay-badge" title="Archived race replayed as if live, for testing">
-            TEST REPLAY
-          </span>
-        )}
-        <span className="rc-bar__title">{p.title ?? 'No live session'}</span>
-      </div>
+      <div className="rc-bar__now">{p.now}</div>
       <div className="rc-bar__test">
+        {p.actions}
         {!open && (
           <button
             type="button"

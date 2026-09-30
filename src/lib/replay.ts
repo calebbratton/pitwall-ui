@@ -202,6 +202,25 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
       }
     case 'track_status':
       return { type: 'track_status', status: trackStatus(d.status), lap: num(d.lap) }
+    case 'lap': {
+      const lap = num(d.lap)
+      return lap === null || typeof d.tla !== 'string'
+        ? null
+        : {
+            type: 'lap',
+            tla: d.tla,
+            number: str(d.number),
+            lap,
+            time: num(d.time),
+            compound: compound(d.compound),
+            tyre_age: num(d.tyre_age),
+            pit_in: d.pit_in === true,
+            pit_out: d.pit_out === true,
+            neutralised: d.neutralised === true,
+            personal_best: d.personal_best === true,
+            overall_best: d.overall_best === true,
+          }
+    }
     case 'weather':
       return {
         type: 'weather',
@@ -309,6 +328,7 @@ export const initialReplayState: ReplayState = {
   raceControl: [],
   weather: null,
   forecast: null,
+  laps: {},
   radio: [],
   pitCalls: [],
   liveId: null,
@@ -389,6 +409,12 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
     }
     case 'track_status':
       return { ...state, trackStatus: e.status }
+    case 'lap': {
+      const { type: _type, tla, number: _number, ...cell } = e
+      void _type
+      void _number
+      return { ...state, laps: { ...state.laps, [tla]: { ...state.laps[tla], [cell.lap]: cell } } }
+    }
     case 'weather': {
       const { type: _type, ...weather } = e
       void _type

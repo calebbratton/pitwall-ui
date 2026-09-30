@@ -175,6 +175,21 @@ export interface PredictionSet {
 /** Where the live session's data comes from: the real live timing feed, or an archived race (testing). */
 export type LiveSource = 'live' | 'replay'
 
+/** One completed lap of one car (backend `lap` event), for the run timeline. */
+export interface LapCell {
+  lap: number
+  /** seconds; null when the feed had no time (e.g. lap 1) */
+  time: number | null
+  compound: Compound | null
+  tyre_age: number | null
+  pit_in: boolean
+  pit_out: boolean
+  /** an SC / VSC / red flag was out during the lap */
+  neutralised: boolean
+  personal_best: boolean
+  overall_best: boolean
+}
+
 /** Latest WeatherData from the feed (about once a minute). */
 export interface Weather {
   air_c: number | null
@@ -205,6 +220,7 @@ export type ReplayEvent =
   | { type: 'radio'; driver: string; tla: string; utc: string | null; url: string; text: string | null }
   | { type: 'radio_transcript'; url: string; tla: string; text: string }
   | { type: 'pit_calls'; report: PitCallReport }
+  | ({ type: 'lap'; tla: string; number: string } & LapCell)
   | ({ type: 'weather' } & Weather)
   | ({ type: 'forecast' } & Forecast)
   | ({ type: 'track' } & TrackShape)
@@ -227,6 +243,7 @@ export const REPLAY_EVENT_NAMES: readonly Exclude<ReplayEventName, 'connection'>
   'radio',
   'radio_transcript',
   'pit_calls',
+  'lap',
   'weather',
   'forecast',
   'track',
@@ -319,6 +336,8 @@ export interface ReplayState {
   latestTranscriptId: number | null
   weather: Weather | null
   forecast: Forecast | null
+  /** run timeline: TLA -> lap number -> lap */
+  laps: Record<string, Record<number, LapCell>>
   seq: number
 }
 

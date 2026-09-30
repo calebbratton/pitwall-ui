@@ -30,6 +30,7 @@ import { PredictionPanel } from './PredictionPanel'
 import { RaceControlFeed } from './RaceControlFeed'
 import { RadioFeed } from './RadioFeed'
 import { ReplayControls } from './ReplayControls'
+import { RunTimeline } from './RunTimeline'
 import { TimingTower } from './TimingTower'
 import { TrackLine } from './TrackLine'
 import { TrackMap } from './TrackMap'
@@ -268,6 +269,9 @@ export function LiveView({ useMock, hidden }: Props) {
           loading={state.phase === 'connecting'}
           emptyText={onLive ? 'Connected — waiting for timing data from the live feed.' : undefined}
         />
+    ),
+    timeline: (
+      <RunTimeline laps={state.laps} drivers={snapshot?.drivers ?? []} follow={follow} onFollow={setFollow} />
     ),
     calls: <PitCallsPanel sets={state.pitCalls} trackStatus={state.trackStatus} follow={follow} />,
     predict: (

@@ -14,15 +14,15 @@ describe('dashboard layout', () => {
   })
 
   it('folds columns for narrow screens without losing panels', () => {
-    expect(fold(DEFAULT_LAYOUT.columns, 1)).toEqual([['tower', 'map', 'calls', 'predict', 'side']])
-    expect(fold(DEFAULT_LAYOUT.columns, 2)[1]).toEqual(['map', 'calls', 'predict', 'side'])
+    expect(fold(DEFAULT_LAYOUT.columns, 1)).toEqual([['tower', 'map', 'timeline', 'calls', 'predict', 'side']])
+    expect(fold(DEFAULT_LAYOUT.columns, 2)[1]).toEqual(['map', 'timeline', 'calls', 'predict', 'side'])
     expect(fold(DEFAULT_LAYOUT.columns, 3)).toBe(DEFAULT_LAYOUT.columns)
   })
 
   it('moves panels up, down and across columns', () => {
     let l = move(DEFAULT_LAYOUT, 'calls', 'up')
-    expect(l.columns[1]).toEqual(['calls', 'map', 'predict'])
-    expect(move(l, 'calls', 'up')).toBe(l) // already at the top
+    expect(l.columns[1]).toEqual(['map', 'calls', 'timeline', 'predict'])
+    expect(move(l, 'map', 'up')).toBe(l) // already at the top
     l = move(l, 'predict', 'left')
     expect(l.columns[0]).toEqual(['tower', 'predict'])
     expect(move(l, 'tower', 'left')).toBe(l)

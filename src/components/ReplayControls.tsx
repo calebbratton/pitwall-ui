@@ -1,7 +1,10 @@
 import type { LiveSessionInfo, ReplayPhase } from '../liveTypes'
 import type { Sessions } from '../hooks/useSessions'
 
-const SEASONS = [2026, 2025, 2024] as const
+// Pit Wall covers the current season and the one before (rolling; matches the backend's
+// GET /api/seasons).
+const CURRENT_YEAR = new Date().getFullYear()
+const SEASONS = [CURRENT_YEAR, CURRENT_YEAR - 1] as const
 const SPEEDS = [1, 10, 30, 60, 120] as const
 
 interface Props {

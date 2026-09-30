@@ -3405,3 +3405,38 @@ pre {
     height: 30px;
   }
 }
+
+/* ---------- weather bar ---------- */
+
+.wx {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 14px;
+  padding: 3px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.wx__now {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+.wx.is-raining .wx__now {
+  color: var(--tyre-wet);
+}
+.wx__fc {
+  margin-left: auto;
+}
+.wx__fc.is-wet {
+  color: var(--tyre-wet);
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .wx__fc {
+    margin-left: 0;
+  }
+}

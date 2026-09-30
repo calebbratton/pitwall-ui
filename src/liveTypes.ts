@@ -175,6 +175,26 @@ export interface PredictionSet {
 /** Where the live session's data comes from: the real live timing feed, or an archived race (testing). */
 export type LiveSource = 'live' | 'replay'
 
+/** Latest WeatherData from the feed (about once a minute). */
+export interface Weather {
+  air_c: number | null
+  track_c: number | null
+  humidity: number | null
+  wind_ms: number | null
+  wind_dir: number | null
+  raining: boolean
+  lap: number | null
+}
+
+/** Open-Meteo rain chance over the session window (live sessions only). */
+export interface Forecast {
+  location: string
+  /** 0..1, peak hourly probability */
+  p_rain: number
+  mm: number
+  hourly: { utc: string; p: number; mm: number }[]
+}
+
 export type ReplayEvent =
   | { type: 'live'; live_id: string; source: LiveSource }
   | ({ type: 'prediction' } & Prediction)
@@ -185,6 +205,8 @@ export type ReplayEvent =
   | { type: 'radio'; driver: string; tla: string; utc: string | null; url: string; text: string | null }
   | { type: 'radio_transcript'; url: string; tla: string; text: string }
   | { type: 'pit_calls'; report: PitCallReport }
+  | ({ type: 'weather' } & Weather)
+  | ({ type: 'forecast' } & Forecast)
   | ({ type: 'track' } & TrackShape)
   | { type: 'positions'; utc: string | null; cars: CarFix[] }
   | { type: 'end' }
@@ -205,6 +227,8 @@ export const REPLAY_EVENT_NAMES: readonly Exclude<ReplayEventName, 'connection'>
   'radio',
   'radio_transcript',
   'pit_calls',
+  'weather',
+  'forecast',
   'track',
   'positions',
   'end',
@@ -293,6 +317,8 @@ export interface ReplayState {
   yellowSectors: Record<number, boolean>
   /** id of the radio clip whose non-empty transcript arrived most recently */
   latestTranscriptId: number | null
+  weather: Weather | null
+  forecast: Forecast | null
   seq: number
 }
 

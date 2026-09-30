@@ -202,6 +202,31 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
       }
     case 'track_status':
       return { type: 'track_status', status: trackStatus(d.status), lap: num(d.lap) }
+    case 'weather':
+      return {
+        type: 'weather',
+        air_c: num(d.air_c),
+        track_c: num(d.track_c),
+        humidity: num(d.humidity),
+        wind_ms: num(d.wind_ms),
+        wind_dir: num(d.wind_dir),
+        raining: d.raining === true,
+        lap: num(d.lap),
+      }
+    case 'forecast': {
+      const p = num(d.p_rain)
+      return p === null
+        ? null
+        : {
+            type: 'forecast',
+            location: str(d.location),
+            p_rain: p,
+            mm: num(d.mm) ?? 0,
+            hourly: Array.isArray(d.hourly)
+              ? d.hourly.filter(isRecord).map((h) => ({ utc: str(h.utc), p: num(h.p) ?? 0, mm: num(h.mm) ?? 0 }))
+              : [],
+          }
+    }
     case 'race_control':
       return typeof d.message === 'string'
         ? { type: 'race_control', lap: num(d.lap), category: str(d.category), message: d.message }
@@ -282,6 +307,8 @@ export const initialReplayState: ReplayState = {
   snapshot: null,
   trackStatus: null,
   raceControl: [],
+  weather: null,
+  forecast: null,
   radio: [],
   pitCalls: [],
   liveId: null,
@@ -362,6 +389,16 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
     }
     case 'track_status':
       return { ...state, trackStatus: e.status }
+    case 'weather': {
+      const { type: _type, ...weather } = e
+      void _type
+      return { ...state, weather }
+    }
+    case 'forecast': {
+      const { type: _type, ...forecast } = e
+      void _type
+      return { ...state, forecast }
+    }
     case 'race_control': {
       if (state.raceControl.some((r) => r.lap === e.lap && r.category === e.category && r.message === e.message)) {
         return state

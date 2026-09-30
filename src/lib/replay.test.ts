@@ -327,3 +327,24 @@ describe('live stream catch-up and reconnects', () => {
     expect(feedFinished(run([['end', {}]]))).toBe(true)
   })
 })
+
+describe('weather events', () => {
+  it('parses weather and forecast and keeps the latest in state', () => {
+    const w = parseReplayEvent(
+      'weather',
+      JSON.stringify({ air_c: 26.2, track_c: 47.3, humidity: 59, wind_ms: 0.4, wind_dir: 104, raining: true, lap: 12 }),
+    )
+    expect(w).toMatchObject({ type: 'weather', track_c: 47.3, raining: true })
+    const f = parseReplayEvent(
+      'forecast',
+      JSON.stringify({ location: 'Kuala Lumpur', p_rain: 0.98, mm: 1.5, hourly: [{ utc: '2026-10-04T07:00', p: 75, mm: 0.5 }] }),
+    )
+    expect(f).toMatchObject({ type: 'forecast', p_rain: 0.98 })
+    expect(parseReplayEvent('forecast', JSON.stringify({ p_rain: 'x' }))).toBeNull()
+    let state = replayReducer(initialReplayState, { type: 'start', params })
+    state = replayReducer(state, { type: 'event', event: w as ReplayEvent })
+    state = replayReducer(state, { type: 'event', event: f as ReplayEvent })
+    expect(state.weather?.track_c).toBe(47.3)
+    expect(state.forecast?.location).toBe('Kuala Lumpur')
+  })
+})

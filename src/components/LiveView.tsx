@@ -34,6 +34,7 @@ import { TimingTower } from './TimingTower'
 import { TrackLine } from './TrackLine'
 import { TrackMap } from './TrackMap'
 import { TrackStatusBanner } from './TrackStatusBanner'
+import { WeatherBar } from './WeatherBar'
 import { Widget } from './Widget'
 
 interface Props {
@@ -384,6 +385,7 @@ export function LiveView({ useMock, hidden }: Props) {
         callsLap={latestCalls?.report.lap ?? null}
         predictionLap={latestPrediction?.prediction.lap ?? null}
       />
+      <WeatherBar weather={state.weather} forecast={state.forecast} />
       {!layout.lineHidden && (
         <TrackLine snapshot={snapshot} trackStatus={state.trackStatus} follow={follow} onFollow={setFollow} />
       )}

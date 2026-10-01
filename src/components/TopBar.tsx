@@ -8,7 +8,7 @@ const LABEL = {
   offline: 'OFFLINE',
 } as const
 
-export type ViewMode = 'chat' | 'live'
+export type ViewMode = 'chat' | 'live' | 'review'
 
 interface Props {
   mode: ViewMode
@@ -58,6 +58,9 @@ export function TopBar({ mode, onMode, connection, onNewSession, panelOpen, onTo
         <button type="button" className="modes__btn" aria-pressed={mode === 'live'} onClick={() => onMode('live')}>
           <span className="modes__dot" aria-hidden="true" />
           Live
+        </button>
+        <button type="button" className="modes__btn" aria-pressed={mode === 'review'} onClick={() => onMode('review')}>
+          Review
         </button>
       </nav>
 

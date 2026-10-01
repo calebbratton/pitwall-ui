@@ -4,6 +4,7 @@ import { Composer } from './components/Composer'
 import { OfflineBanner } from './components/OfflineBanner'
 import { SessionPanel } from './components/SessionPanel'
 import { LiveView } from './components/LiveView'
+import { RaceReview } from './components/RaceReview'
 import type { ViewMode } from './components/TopBar'
 import { TopBar } from './components/TopBar'
 import { Transcript } from './components/Transcript'
@@ -56,6 +57,7 @@ export default function App() {
           // Remount on mock/API switch so the old stream is closed and state reset.
           <LiveView key={mock ? 'mock' : 'api'} useMock={mock} hidden={mode !== 'live'} />
         )}
+        {mode === 'review' && <RaceReview />}
         <main className="layout" hidden={mode !== 'chat'}>
           <div className="main">
             <Transcript messages={chat.messages} onSuggest={chat.send} disabled={chat.streaming} />

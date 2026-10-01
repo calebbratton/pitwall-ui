@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { LiveCurrent, ReplayEvent } from '../liveTypes'
 import { useColumns } from '../hooks/useColumns'
+import { useYourCall } from '../hooks/useYourCall'
 import { useFollow } from '../hooks/useFollow'
 import { useLiveChat } from '../hooks/useLiveChat'
 import { useLiveCurrent } from '../hooks/useLiveCurrent'
@@ -245,6 +246,7 @@ export function LiveView({ useMock, hidden }: Props) {
         {live.starting ? 'Starting…' : 'Start following live feed'}
       </button>
     ) : null
+  const yourCall = useYourCall(state.pitCalls, state.snapshot, follow)
   const latestCalls = state.pitCalls.at(-1)
   const latestPrediction = state.predictions.at(-1)
   const latestTranscript = state.radio.find((r) => r.id === state.latestTranscriptId) ?? null
@@ -274,7 +276,7 @@ export function LiveView({ useMock, hidden }: Props) {
     timeline: (
       <RunTimeline laps={state.laps} drivers={snapshot?.drivers ?? []} follow={follow} onFollow={setFollow} />
     ),
-    alerts: <AlertFeed alerts={state.alerts} follow={follow} director={state.director} />,
+    alerts: <AlertFeed alerts={state.alerts} follow={follow} director={state.director} yourCall={yourCall} />,
     calls: <PitCallsPanel sets={state.pitCalls} trackStatus={state.trackStatus} follow={follow} />,
     predict: (
         <PredictionPanel

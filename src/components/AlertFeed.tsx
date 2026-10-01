@@ -1,11 +1,51 @@
 import { useState } from 'react'
 import { useAlertNotifications } from '../hooks/useAlertNotifications'
 import type { DirectorPick, StrategyAlert } from '../liveTypes'
+import type { Call, Round, Tally } from '../lib/yourCall'
 
 interface Props {
   alerts: StrategyAlert[]
   follow: string | null
   director?: DirectorPick | null
+  yourCall?: { round: Round | null; tally: Tally; choose: (c: Call) => void }
+}
+
+/** "Your call" at a SC/VSC: pick before the engine's call is shown, then see what the team did. */
+function YourCallCard({ round, tally, choose }: NonNullable<Props['yourCall']>) {
+  if (!round) return null
+  const kind = round.status === 'SAFETY_CAR' ? 'SC' : 'VSC'
+  const mark = (c: Call | null) => (round.team && c ? (c === round.team ? ' ✓' : ' ✗') : '')
+  return (
+    <div className="af__yc" aria-live="polite">
+      <p className="af__watch">
+        {kind} on lap {round.lap ?? '?'} — <b>your call for {round.tla}</b>
+      </p>
+      {!round.choice && !round.team ? (
+        <div className="af__yc-buttons">
+          <button type="button" className="btn btn--xs" onClick={() => choose('PIT')}>
+            PIT
+          </button>
+          <button type="button" className="btn btn--xs" onClick={() => choose('STAY OUT')}>
+            STAY OUT
+          </button>
+        </div>
+      ) : (
+        <p className="af__odds">
+          You: {round.choice ?? '—'}
+          {mark(round.choice)} · Engine: {round.engine}
+          {mark(round.engine)}
+          {round.team ? ` · Team: ${round.team}` : ' · waiting for the team…'}
+        </p>
+      )}
+      {(round.choice || round.team) && round.reason && <p className="af__next">Engine: {round.reason}</p>}
+      {tally.rounds > 0 && (
+        <p className="af__next">
+          Season so far: you matched the team {tally.youMatched}/{tally.rounds}, the engine {tally.engineMatched}/
+          {tally.rounds}
+        </p>
+      )}
+    </div>
+  )
 }
 
 const pct = (p: number) => `${Math.round(p * 100)}%`
@@ -58,7 +98,7 @@ const BATTLE_OUTCOME: Record<string, string> = { worked: 'passed', failed: 'no p
  * alerts.py decides when; nothing here is generated). Newest first; an alert updates in place and
  * shows how it turned out.
  */
-export function AlertFeed({ alerts, follow, director }: Props) {
+export function AlertFeed({ alerts, follow, director, yourCall }: Props) {
   const [mine, setMine] = useState(false)
   const notify = useAlertNotifications(alerts)
   const shown = mine && follow ? alerts.filter((a) => a.drivers.includes(follow)) : alerts
@@ -83,6 +123,7 @@ export function AlertFeed({ alerts, follow, director }: Props) {
           </button>
         )}
       </header>
+      {yourCall && <YourCallCard {...yourCall} />}
       {director && <DirectorCard pick={director} />}
       {shown.length === 0 ? (
         <p className="muted af__empty">

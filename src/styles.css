@@ -3622,3 +3622,18 @@ pre {
   color: var(--muted);
 }
 .af__item--battle { border-left-color: var(--purple-text); }
+
+/* ---------- your call ---------- */
+
+.af__yc {
+  margin: 0 8px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--yellow);
+  border-radius: var(--radius);
+  background: var(--yellow-bg);
+}
+.af__yc-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}

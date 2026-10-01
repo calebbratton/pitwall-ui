@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAlertNotifications } from '../hooks/useAlertNotifications'
 import type { DirectorPick, StrategyAlert } from '../liveTypes'
 
 interface Props {
@@ -50,6 +51,7 @@ const KIND_LABEL: Record<string, string> = {
 }
 
 const OUTCOME_LABEL: Record<string, string> = { worked: 'worked', failed: "didn't work", 'not taken': 'not taken' }
+const BATTLE_OUTCOME: Record<string, string> = { worked: 'passed', failed: 'no pass' }
 
 /**
  * The strategy alert stream: a short list of calls at the moments that matter (backend
@@ -58,11 +60,23 @@ const OUTCOME_LABEL: Record<string, string> = { worked: 'worked', failed: "didn'
  */
 export function AlertFeed({ alerts, follow, director }: Props) {
   const [mine, setMine] = useState(false)
+  const notify = useAlertNotifications(alerts)
   const shown = mine && follow ? alerts.filter((a) => a.drivers.includes(follow)) : alerts
   return (
     <section className="af" aria-label="Strategy calls">
       <header className="af__head">
         <h2 className="live-h">Strategy calls</h2>
+        {notify.supported && (
+          <button
+            type="button"
+            className="btn btn--xs"
+            aria-pressed={notify.on}
+            title="Browser notifications for battles, safety-car calls and undercuts"
+            onClick={() => void notify.toggle()}
+          >
+            {notify.on ? '🔔 On' : '🔕 Notify'}
+          </button>
+        )}
         {follow && (
           <button type="button" className="btn btn--xs" aria-pressed={mine} onClick={() => setMine(!mine)}>
             {mine ? `Only ${follow}` : 'All cars'}
@@ -88,7 +102,7 @@ export function AlertFeed({ alerts, follow, director }: Props) {
                 {a.p !== null && <span className="af__p">{Math.round(a.p * 100)}%</span>}
                 {a.outcome && (
                   <span className={`af__outcome af__outcome--${a.outcome.replace(' ', '-')}`}>
-                    {OUTCOME_LABEL[a.outcome]}
+                    {(a.kind === 'battle' ? BATTLE_OUTCOME : OUTCOME_LABEL)[a.outcome] ?? a.outcome}
                   </span>
                 )}
               </div>

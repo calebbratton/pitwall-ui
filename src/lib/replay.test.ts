@@ -390,3 +390,24 @@ describe('strategy alerts', () => {
     expect(parseReplayEvent('alert', JSON.stringify({ kind: 'x' }))).toBeNull()
   })
 })
+
+describe('director', () => {
+  it('parses the pick and keeps the latest', () => {
+    const e = parseReplayEvent(
+      'director',
+      JSON.stringify({
+        lap: 12,
+        watch: { chaser: 'HAM', ahead: 'LEC', position: 4, gap: 0.7, closing: 0.4, p_pass: 0.52, p_close: 0.9 },
+        battles: [
+          { chaser: 'HAM', ahead: 'LEC', position: 4, gap: 0.7, closing: 0.4, p_pass: 0.52, p_close: 0.9 },
+          { chaser: 'ALO', ahead: 'GAS', position: 9, gap: 1.2, closing: 0.1, p_pass: 0.2, p_close: 0.6 },
+          { nope: true },
+        ],
+      }),
+    ) as ReplayEvent
+    let state = replayReducer(initialReplayState, { type: 'start', params })
+    state = replayReducer(state, { type: 'event', event: e })
+    expect(state.director?.watch?.chaser).toBe('HAM')
+    expect(state.director?.battles).toHaveLength(2)
+  })
+})

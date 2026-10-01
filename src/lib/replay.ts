@@ -7,6 +7,7 @@ import type {
   Prediction,
   PredictionRow,
   RaceControlItem,
+  Battle,
   RejoinKind,
   RejoinRow,
   ReplayEvent,
@@ -228,6 +229,26 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
             overall_best: d.overall_best === true,
           }
     }
+    case 'director': {
+      const battle = (b: unknown): Battle | null =>
+        isRecord(b) && typeof b.chaser === 'string' && typeof b.ahead === 'string'
+          ? {
+              chaser: b.chaser,
+              ahead: b.ahead,
+              position: num(b.position),
+              gap: num(b.gap) ?? 0,
+              closing: num(b.closing) ?? 0,
+              p_pass: num(b.p_pass) ?? 0,
+              p_close: num(b.p_close) ?? 0,
+            }
+          : null
+      return {
+        type: 'director',
+        lap: num(d.lap),
+        watch: battle(d.watch),
+        battles: Array.isArray(d.battles) ? d.battles.map(battle).filter((b): b is Battle => b !== null) : [],
+      }
+    }
     case 'alert':
       return typeof d.id === 'string' && typeof d.headline === 'string'
         ? {
@@ -354,6 +375,7 @@ export const initialReplayState: ReplayState = {
   forecast: null,
   laps: {},
   alerts: [],
+  director: null,
   radio: [],
   pitCalls: [],
   liveId: null,
@@ -434,6 +456,11 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
     }
     case 'track_status':
       return { ...state, trackStatus: e.status }
+    case 'director': {
+      const { type: _type, ...director } = e
+      void _type
+      return { ...state, director }
+    }
     case 'alert': {
       const { type: _type, ...alert } = e
       void _type

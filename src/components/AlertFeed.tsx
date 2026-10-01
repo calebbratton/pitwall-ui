@@ -1,13 +1,48 @@
 import { useState } from 'react'
-import type { StrategyAlert } from '../liveTypes'
+import type { DirectorPick, StrategyAlert } from '../liveTypes'
 
 interface Props {
   alerts: StrategyAlert[]
   follow: string | null
+  director?: DirectorPick | null
+}
+
+const pct = (p: number) => `${Math.round(p * 100)}%`
+
+/** The Director's pick: which onboard to watch for the most likely battle (switch it yourself). */
+function DirectorCard({ pick }: { pick: DirectorPick }) {
+  const w = pick.watch
+  if (!w) return null
+  return (
+    <div className="af__director" aria-live="polite">
+      <p className="af__watch">
+        Watch <b>{w.chaser}</b>'s onboard
+        <span className="af__why">
+          {' '}
+          — {w.gap.toFixed(1)} s behind {w.ahead}
+          {w.position ? ` for P${w.position}` : ''}
+          {w.closing > 0.05 ? `, closing ${w.closing.toFixed(1)} s / 3 laps` : ''}
+        </span>
+      </p>
+      <p className="af__odds">
+        pass in 5 laps {pct(w.p_pass)} · within 1 s soon {pct(w.p_close)}
+      </p>
+      {pick.battles.length > 1 && (
+        <p className="af__next">
+          Next:{' '}
+          {pick.battles
+            .slice(1)
+            .map((b) => `${b.chaser} on ${b.ahead} (${pct(b.p_pass)})`)
+            .join(' · ')}
+        </p>
+      )}
+    </div>
+  )
 }
 
 const KIND_LABEL: Record<string, string> = {
   sc_call: 'SC / VSC',
+  battle: 'Battle',
   undercut: 'Undercut',
   pit_stop: 'Pit stops',
   fastest_lap: 'Fastest lap',
@@ -21,7 +56,7 @@ const OUTCOME_LABEL: Record<string, string> = { worked: 'worked', failed: "didn'
  * alerts.py decides when; nothing here is generated). Newest first; an alert updates in place and
  * shows how it turned out.
  */
-export function AlertFeed({ alerts, follow }: Props) {
+export function AlertFeed({ alerts, follow, director }: Props) {
   const [mine, setMine] = useState(false)
   const shown = mine && follow ? alerts.filter((a) => a.drivers.includes(follow)) : alerts
   return (
@@ -34,6 +69,7 @@ export function AlertFeed({ alerts, follow }: Props) {
           </button>
         )}
       </header>
+      {director && <DirectorCard pick={director} />}
       {shown.length === 0 ? (
         <p className="muted af__empty">
           Calls appear here when something matters: a safety car, an undercut that's on, pit stops, rain. Quiet laps

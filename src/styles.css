@@ -3596,3 +3596,29 @@ pre {
   font-size: 12px;
   color: var(--text-2);
 }
+
+/* ---------- director pick ---------- */
+
+.af__director {
+  margin: 0 8px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--purple);
+  border-radius: var(--radius);
+  background: var(--purple-bg);
+}
+.af__watch {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.af__why {
+  color: var(--text-2);
+  font-size: 13px;
+}
+.af__odds,
+.af__next {
+  margin: 3px 0 0;
+  font: 500 11px var(--font-mono);
+  color: var(--muted);
+}
+.af__item--battle { border-left-color: var(--purple-text); }

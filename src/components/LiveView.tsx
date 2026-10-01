@@ -274,7 +274,7 @@ export function LiveView({ useMock, hidden }: Props) {
     timeline: (
       <RunTimeline laps={state.laps} drivers={snapshot?.drivers ?? []} follow={follow} onFollow={setFollow} />
     ),
-    alerts: <AlertFeed alerts={state.alerts} follow={follow} />,
+    alerts: <AlertFeed alerts={state.alerts} follow={follow} director={state.director} />,
     calls: <PitCallsPanel sets={state.pitCalls} trackStatus={state.trackStatus} follow={follow} />,
     predict: (
         <PredictionPanel

@@ -212,6 +212,25 @@ export interface StrategyAlert {
   text?: string | null
 }
 
+/** A close pair scored by the backend Director (battles.py models). */
+export interface Battle {
+  chaser: string
+  ahead: string
+  position: number | null
+  gap: number
+  /** gap change over the last 3 laps (+ = chaser closing) */
+  closing: number
+  p_pass: number
+  p_close: number
+}
+
+/** The Director's pick each lap: which onboard to watch (the viewer switches themselves). */
+export interface DirectorPick {
+  lap: number | null
+  watch: Battle | null
+  battles: Battle[]
+}
+
 /** Latest WeatherData from the feed (about once a minute). */
 export interface Weather {
   air_c: number | null
@@ -244,6 +263,7 @@ export type ReplayEvent =
   | { type: 'pit_calls'; report: PitCallReport }
   | ({ type: 'lap'; tla: string; number: string } & LapCell)
   | ({ type: 'alert' } & StrategyAlert)
+  | ({ type: 'director' } & DirectorPick)
   | ({ type: 'weather' } & Weather)
   | ({ type: 'forecast' } & Forecast)
   | ({ type: 'track' } & TrackShape)
@@ -268,6 +288,7 @@ export const REPLAY_EVENT_NAMES: readonly Exclude<ReplayEventName, 'connection'>
   'pit_calls',
   'lap',
   'alert',
+  'director',
   'weather',
   'forecast',
   'track',
@@ -360,6 +381,7 @@ export interface ReplayState {
   latestTranscriptId: number | null
   weather: Weather | null
   forecast: Forecast | null
+  director: DirectorPick | null
   /** strategy alerts, newest first (updated in place by id) */
   alerts: StrategyAlert[]
   /** run timeline: TLA -> lap number -> lap */

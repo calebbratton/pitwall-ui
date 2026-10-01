@@ -384,6 +384,9 @@ describe('strategy alerts', () => {
     state = replayReducer(state, { type: 'event', event: ev('a', { status: 'resolved', outcome: 'worked' }) })
     expect(state.alerts.map((a) => a.id)).toEqual(['b', 'a'])
     expect(state.alerts[1].outcome).toBe('worked')
+    state = replayReducer(state, { type: 'event', event: ev('b', { text: 'Leclerc can jump Hamilton (62%).' }) })
+    state = replayReducer(state, { type: 'event', event: ev('b', { status: 'resolved', outcome: 'failed' }) })
+    expect(state.alerts[0].text).toBe('Leclerc can jump Hamilton (62%).') // kept across updates
     expect(parseReplayEvent('alert', JSON.stringify({ kind: 'x' }))).toBeNull()
   })
 })

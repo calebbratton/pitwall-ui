@@ -242,6 +242,7 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
             status: d.status === 'live' ? 'live' : 'resolved',
             outcome:
               d.outcome === 'worked' || d.outcome === 'failed' || d.outcome === 'not taken' ? d.outcome : null,
+            text: typeof d.text === 'string' ? d.text : null,
           }
         : null
     case 'weather':
@@ -441,7 +442,9 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
       // an update keeps its place in the feed; a new alert goes on top
       return {
         ...state,
-        alerts: existing ? state.alerts.map((a) => (a.id === alert.id ? alert : a)) : [alert, ...others].slice(0, 60),
+        alerts: existing
+          ? state.alerts.map((a) => (a.id === alert.id ? { ...alert, text: alert.text ?? a.text } : a))
+          : [alert, ...others].slice(0, 60),
       }
     }
     case 'lap': {

@@ -56,7 +56,8 @@ export function AlertFeed({ alerts, follow }: Props) {
                   </span>
                 )}
               </div>
-              <p className="af__headline">{a.headline}</p>
+              <p className="af__headline">{a.text ?? a.headline}</p>
+              {a.text && <p className="af__detail">{a.headline}</p>}
               {a.detail && <p className="af__detail">{a.detail}</p>}
             </li>
           ))}

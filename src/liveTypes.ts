@@ -208,6 +208,8 @@ export interface StrategyAlert {
   p: number | null
   status: 'live' | 'resolved'
   outcome: 'worked' | 'failed' | 'not taken' | null
+  /** strategist-style line from the LLM (arrives as an update; facts-only, may be absent) */
+  text?: string | null
 }
 
 /** Latest WeatherData from the feed (about once a minute). */

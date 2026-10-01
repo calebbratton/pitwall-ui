@@ -4,7 +4,7 @@
  * On narrower screens the saved columns fold (3 -> 2 -> 1) so one layout works everywhere.
  */
 
-export const WIDGETS = ['tower', 'map', 'timeline', 'calls', 'predict', 'side'] as const
+export const WIDGETS = ['tower', 'map', 'timeline', 'calls', 'predict', 'alerts', 'side'] as const
 export type WidgetId = (typeof WIDGETS)[number]
 
 export const WIDGET_TITLE: Record<WidgetId, string> = {
@@ -13,6 +13,7 @@ export const WIDGET_TITLE: Record<WidgetId, string> = {
   timeline: 'Run timeline',
   calls: 'Pit calls',
   predict: 'Who wins',
+  alerts: 'Strategy calls',
   side: 'Race control · Radio · Strategy',
 }
 
@@ -26,7 +27,7 @@ export interface Layout {
 }
 
 export const DEFAULT_LAYOUT: Layout = {
-  columns: [['tower'], ['map', 'timeline', 'calls', 'predict'], ['side']],
+  columns: [['tower'], ['map', 'timeline', 'calls', 'predict'], ['alerts', 'side']],
   minimized: [],
   hidden: [],
   maximized: null,

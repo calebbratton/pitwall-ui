@@ -228,6 +228,22 @@ export function parseReplayEvent(name: string, raw: string): ReplayEvent | null 
             overall_best: d.overall_best === true,
           }
     }
+    case 'alert':
+      return typeof d.id === 'string' && typeof d.headline === 'string'
+        ? {
+            type: 'alert',
+            id: d.id,
+            kind: str(d.kind),
+            lap: num(d.lap),
+            headline: d.headline,
+            detail: str(d.detail),
+            drivers: Array.isArray(d.drivers) ? d.drivers.map((x) => str(x)) : [],
+            p: num(d.p),
+            status: d.status === 'live' ? 'live' : 'resolved',
+            outcome:
+              d.outcome === 'worked' || d.outcome === 'failed' || d.outcome === 'not taken' ? d.outcome : null,
+          }
+        : null
     case 'weather':
       return {
         type: 'weather',
@@ -336,6 +352,7 @@ export const initialReplayState: ReplayState = {
   weather: null,
   forecast: null,
   laps: {},
+  alerts: [],
   radio: [],
   pitCalls: [],
   liveId: null,
@@ -416,6 +433,17 @@ function applyEvent(state: ReplayState, e: ReplayEvent): ReplayState {
     }
     case 'track_status':
       return { ...state, trackStatus: e.status }
+    case 'alert': {
+      const { type: _type, ...alert } = e
+      void _type
+      const others = state.alerts.filter((a) => a.id !== alert.id)
+      const existing = state.alerts.find((a) => a.id === alert.id)
+      // an update keeps its place in the feed; a new alert goes on top
+      return {
+        ...state,
+        alerts: existing ? state.alerts.map((a) => (a.id === alert.id ? alert : a)) : [alert, ...others].slice(0, 60),
+      }
+    }
     case 'lap': {
       const { type: _type, tla, number: _number, ...cell } = e
       void _type

@@ -196,6 +196,20 @@ export interface LapCell {
   overall_best: boolean
 }
 
+/** A strategy alert (backend alerts.py): fires once, updates in place by id, resolved later. */
+export interface StrategyAlert {
+  id: string
+  kind: 'sc_call' | 'undercut' | 'pit_stop' | 'fastest_lap' | 'weather' | string
+  lap: number | null
+  headline: string
+  detail: string
+  drivers: string[]
+  /** model probability, when the alert is a prediction */
+  p: number | null
+  status: 'live' | 'resolved'
+  outcome: 'worked' | 'failed' | 'not taken' | null
+}
+
 /** Latest WeatherData from the feed (about once a minute). */
 export interface Weather {
   air_c: number | null
@@ -227,6 +241,7 @@ export type ReplayEvent =
   | { type: 'radio_transcript'; url: string; tla: string; text: string }
   | { type: 'pit_calls'; report: PitCallReport }
   | ({ type: 'lap'; tla: string; number: string } & LapCell)
+  | ({ type: 'alert' } & StrategyAlert)
   | ({ type: 'weather' } & Weather)
   | ({ type: 'forecast' } & Forecast)
   | ({ type: 'track' } & TrackShape)
@@ -250,6 +265,7 @@ export const REPLAY_EVENT_NAMES: readonly Exclude<ReplayEventName, 'connection'>
   'radio_transcript',
   'pit_calls',
   'lap',
+  'alert',
   'weather',
   'forecast',
   'track',
@@ -342,6 +358,8 @@ export interface ReplayState {
   latestTranscriptId: number | null
   weather: Weather | null
   forecast: Forecast | null
+  /** strategy alerts, newest first (updated in place by id) */
+  alerts: StrategyAlert[]
   /** run timeline: TLA -> lap number -> lap */
   laps: Record<string, Record<number, LapCell>>
   seq: number

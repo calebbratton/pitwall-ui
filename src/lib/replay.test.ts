@@ -372,3 +372,18 @@ describe('practice and qualifying snapshots', () => {
     expect(isTimedSession({ session_type: '' })).toBe(false)
   })
 })
+
+describe('strategy alerts', () => {
+  it('adds new alerts on top and updates existing ones in place', () => {
+    const ev = (id: string, extra: Record<string, unknown> = {}) =>
+      parseReplayEvent('alert', JSON.stringify({ id, kind: 'undercut', lap: 20, headline: id, detail: '', drivers: ['LEC', 'HAM'], p: 0.62, status: 'live', ...extra })) as ReplayEvent
+    let state = replayReducer(initialReplayState, { type: 'start', params })
+    state = replayReducer(state, { type: 'event', event: ev('a') })
+    state = replayReducer(state, { type: 'event', event: ev('b') })
+    expect(state.alerts.map((a) => a.id)).toEqual(['b', 'a'])
+    state = replayReducer(state, { type: 'event', event: ev('a', { status: 'resolved', outcome: 'worked' }) })
+    expect(state.alerts.map((a) => a.id)).toEqual(['b', 'a'])
+    expect(state.alerts[1].outcome).toBe('worked')
+    expect(parseReplayEvent('alert', JSON.stringify({ kind: 'x' }))).toBeNull()
+  })
+})

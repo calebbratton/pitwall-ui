@@ -24,6 +24,7 @@ import {
 import { liveTarget } from '../lib/liveApi'
 import { shouldAutoQueue } from '../lib/radioQueue'
 import { feedFinished, isTimedSession } from '../lib/replay'
+import { AlertFeed } from './AlertFeed'
 import { LiveChat } from './LiveChat'
 import { PitCallsPanel } from './PitCallsPanel'
 import { PredictionPanel } from './PredictionPanel'
@@ -273,6 +274,7 @@ export function LiveView({ useMock, hidden }: Props) {
     timeline: (
       <RunTimeline laps={state.laps} drivers={snapshot?.drivers ?? []} follow={follow} onFollow={setFollow} />
     ),
+    alerts: <AlertFeed alerts={state.alerts} follow={follow} />,
     calls: <PitCallsPanel sets={state.pitCalls} trackStatus={state.trackStatus} follow={follow} />,
     predict: (
         <PredictionPanel
